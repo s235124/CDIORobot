@@ -3,54 +3,97 @@
 from ev3dev2.motor import *
 from ev3dev2.sound import *
 from ev3dev2.button import *
+from ev3dev2.sensor.lego import InfraredSensor
+from ev3dev2.sensor.lego import GyroSensor
 import os
-import time
-import paramiko
+from time import sleep
+# import paramiko
 
 os.system('setfont Lat15-TerminusBold14')
 
 button = Button()
 
 spkr = Sound()
-shovelMotor = MediumMotor(OUTPUT_D); shovelMotor.stop_action = 'hold'
 
-steer_pair = MoveTank(OUTPUT_B, OUTPUT_C)
+print("STARTED")
+angle = 90 # <-- This should be part of arg
+secondsToTurn = 1 # Need to figure out seconds
 
-print('PROGRAM STARTED')
+tank_drive = MoveTank(OUTPUT_A, OUTPUT_C)
+tank_drive.gyro = GyroSensor()
+tank_drive.gyro.calibrate()
 
-def pickBallUp():
-    print("\npicking up ball")
-    shovelMotor.on_for_seconds(speed=-100, seconds=1)
-    # spkr.play_file(wav_file="/home/robot/Gruppe3CDIOPython/ballPickupSound.wav", volume=50, play_type=Sound.PLAY_NO_WAIT_FOR_COMPLETE) # goofing off, unnecessary
-    steer_pair.on_for_rotations(left_speed=30, right_speed=30, rotations=1)
-    shovelMotor.on_for_seconds(speed=100, seconds=1)
+port = MediumMotor(OUTPUT_B)
+shooter = MediumMotor(OUTPUT_D)
 
-def move_to_target(target_x, target_y):
-    # Implement logic to move towards the target
-    pass
+ir = InfraredSensor()
+ir.mode = 'IR-REMOTE'
 
-# Setup SSH client
-def listen_for_commands():
-    ssh_client = paramiko.SSHClient()
-    ssh_client.load_system_host_keys()
-    ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-    ssh_client.connect('<EV3-IP-address>', username='robot', password='ev3dev')
+def top_left_channel_1_action(state):
 
-    # Continuously listen for new target coordinates
-    while True:
-        stdin, stdout, stderr = ssh_client.exec_command('python3 get_target_coords.py')
-        target_x, target_y = stdout.read().decode().split(',')
-        move_to_target(int(target_x), int(target_y))
-        time.sleep(0.5)  # Update interval for new target coordinates
-    
-listen_for_commands()
+    if state: # state is True (pressed) or False
+        tank_drive.on(left_speed=40, right_speed=40)
+    else:
+        tank_drive.off()
+
+def bottom_left_channel_1_action(state):
+
+    if state:
+        tank_drive.on(left_speed=-40, right_speed=-40)
+    else:
+        tank_drive.off()
+
+def top_right_channel_1_action(state):
+
+    if state:
+        port.on(speed=30)
+    else:
+        port.off()
+
+def bottom_right_channel_1_action(state):
+
+    if state:
+        port.on(speed=-30)
+    else:
+        port.off()
+
+# Associate the event handlers with the functions defined above
+
+ir.on_channel1_top_left = top_left_channel_1_action
+ir.on_channel1_bottom_left = bottom_left_channel_1_action
+ir.on_channel1_top_right = top_right_channel_1_action
+ir.on_channel1_bottom_right = bottom_right_channel_1_action
+
+print("Press the buttons on the remote to control the motors.")
 
 while True:
-    if button.up:
-        shovelMotor.on_for_seconds(speed=80, seconds=1)
-    elif button.down:
-        shovelMotor.on_for_seconds(speed=-80, seconds=1)
-    elif button.right:
-        pickBallUp()
-    elif button.left:
-        exit()
+    buttonsPressed = ir.buttons_pressed(channel=1)
+    print("Buttons pressed:", buttonsPressed)
+    sleep(0.5)
+
+# while True:
+#     ir.process()
+#     sleep(0.01)
+
+# For testing using buttons on the EV3 brick
+# while True:
+
+#     if button.up:
+#         port.on_for_seconds(speed=100, seconds=.18)
+#         time.sleep(1)
+#         tank.on_for_seconds(left_speed=30, right_speed=30, seconds=secondsToTurn)
+#         port.on_for_seconds(speed=-100, seconds=.18)
+#     elif button.down:
+#         shooter.on_for_seconds(speed=10, seconds=1)
+#         time.sleep(1)
+#         shooter.on_for_seconds(speed=-10, seconds=1)
+#     elif button.right:
+#         port.on_for_seconds(speed=20, seconds=.5)
+#         time.sleep(.25)
+#         shooter.on_for_seconds(speed=20, seconds=.5)
+#         shooter.on_for_seconds(speed=-20, seconds=.5)
+#         port.on_for_seconds(speed=-20, seconds=.5)
+#     elif button.left:
+#         tank.on_for_seconds(left_speed=30, right_speed=30, seconds=secondsToTurn)
+#         time.sleep(1)
+#         tank.on_for_seconds(left_speed=-30, right_speed=-30, seconds=secondsToTurn)
