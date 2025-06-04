@@ -117,7 +117,7 @@ kamera = cv2.VideoCapture(0)
 kamera.set(cv2.CAP_PROP_FRAME_WIDTH, 1920)
 kamera.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080)
 kamera.set(cv2.CAP_PROP_AUTO_EXPOSURE, 0.25)  # Manual exposure
-kamera.set(cv2.CAP_PROP_EXPOSURE, -4)
+kamera.set(cv2.CAP_PROP_EXPOSURE, -6)
 
 # Global variables for calibration
 calibration_done = False
@@ -301,6 +301,7 @@ while True:
 
         lengthBtwCircles = np.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
         inCm = lengthBtwCircles * cm_per_pixel
+
         print(f"Distance between circles at points ({x1:.2f}, {y1:.2f}) and ({x2:.2f}, {y2:.2f}): {lengthBtwCircles:.2f} pixels and {inCm:.2f} cm")
 
     # Exit on 'q'

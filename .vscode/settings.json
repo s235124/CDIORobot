@@ -1,5 +1,5 @@
 {
     "files.eol": "\n",
-    "ev3devBrowser.download.exclude": "{**/.*,LICENSE,README.md,ev3_env/**,ballPickupSound.wav,test.py}",
+    "ev3devBrowser.download.exclude": "{**/.*,LICENSE,README.md,ev3_env/**,ballPickupSound.wav,test.py,billedegenkendelse.py}",
     "terminal.integrated.shell.windows": "cmd.exe"
 }
