@@ -40,8 +40,8 @@ def calibrate_image(frame):
 
 #ANGLE CALULATION (0° = down, 90° = right, 180° = up, 270° = left)
 def calculate_angle(p1, p2):
-    dx = p2[0] - p1[0]
-    dy = p2[1] - p1[1]
+    dx = float(p2[0]) - float(p1[0])
+    dy = float(p2[1]) - float(p1[1])
     radians = math.atan2(dx, dy)  #dx and dy is swapped for new coordinate logic
     degrees = math.degrees(radians)
     return degrees % 360
@@ -111,6 +111,8 @@ if center_robot and front_robot and balls:
     distance_px = np.linalg.norm(np.array(nearest) - np.array(center_robot))
     distance_cm = distance_px * cm_per_pixel
 
+    print(f"Robot at: ({center_robot[0]}, {center_robot[1]})")
+    print(f"Nearest ball at: ({nearest[0]}, {nearest[1]})")
     robot_angle = calculate_angle(center_robot, front_robot)
     target_angle = calculate_angle(center_robot, nearest)
     turn_angle = (target_angle - robot_angle + 360) % 360
@@ -120,9 +122,10 @@ if center_robot and front_robot and balls:
     cv2.circle(frame, nearest, 10, (0, 0, 255), 3)
     cv2.line(frame, center_robot, nearest, (0, 255, 255), 2)
 
-    cv2.putText(frame, f"Robot heading: {robot_angle:.1f} deg", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 255), 2)
-    cv2.putText(frame, f"Turn: {turn_angle:+.1f} deg", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 255), 2)
-    cv2.putText(frame, f"Distance: {distance_cm:.1f} cm", (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 255), 2)
+    cv2.putText(frame, f"Robot heading: {robot_angle:.1f} deg", (10, 930), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 255), 2)
+    cv2.putText(frame, f"Ball heading: {target_angle:.1f} deg", (10, 960), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 255), 2)
+    cv2.putText(frame, f"Turn: {turn_angle:+.1f} deg", (10, 990), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 255), 2)
+    cv2.putText(frame, f"Distance: {distance_cm:.1f} cm", (10, 1020), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 255), 2)
 
     #Console info
     print(f"[INFO] Robot heading: {robot_angle:.1f}°")
