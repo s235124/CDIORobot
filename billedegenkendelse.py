@@ -196,6 +196,19 @@ while True:
     # Filter small noise
     min_wall_area = 500
     filtered_red_contours = [cnt for cnt in red_contours if cv2.contourArea(cnt) > min_wall_area]
+    
+    # Forsøg at identificere det røde kryds
+    for cnt in filtered_red_contours:
+        approx = cv2.approxPolyDP(cnt, 0.04 * cv2.arcLength(cnt, True), True)
+        x, y, w, h = cv2.boundingRect(cnt)
+        aspect_ratio = w / float(h)
+
+        # Kryds har ofte 12 hjørner og næsten kvadratisk form
+        if 10 <= len(approx) <= 14 and 0.7 <= aspect_ratio <= 1.3:
+            cv2.drawContours(frame, [cnt], -1, (255, 255, 0), 3)
+            cv2.putText(frame, "KRYDS", (x, y - 10),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2)
+
 
     boundary_box = None
     if filtered_red_contours:
