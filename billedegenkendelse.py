@@ -454,17 +454,36 @@ while True:
     red_contours, _ = cv2.findContours(red_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     min_wall_area = 500
     filtered_red_contours = [cnt for cnt in red_contours if cv2.contourArea(cnt) > min_wall_area]
+
     boundary_box = None
 
     # Identify cross shape
     for cnt in filtered_red_contours:
-        approx = cv2.approxPolyDP(cnt, 0.04 * cv2.arcLength(cnt, True), True)
+        area = cv2.contourArea(cnt)
+        if area < 1000:
+            continue
+
         x, y, w, h = cv2.boundingRect(cnt)
         aspect_ratio = w / float(h)
-        if 10 <= len(approx) <= 14 and 0.7 <= aspect_ratio <= 1.3:
-            cv2.drawContours(frame, [cnt], -1, (255, 255, 0), 3)
-            cv2.putText(frame, "KRYDS", (x, y - 10),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2)
+        hull = cv2.convexHull(cnt)
+        hull_area = cv2.contourArea(hull)
+        solidity = area / (hull_area + 1e-5)
+
+        # Kriterier for kryds: kvadratisk, ikke fyldt (hul i midten), stor nok
+        if 0.8 < aspect_ratio < 1.2 and 0.2 < solidity < 0.7:
+            cx = x + w // 2
+            cy = y + h // 2
+
+            # Markering
+            cv2.drawContours(frame, [cnt], -1, (0, 255, 255), 3)  # Gul kant
+            cv2.circle(frame, (cx, cy), 6, (0, 0, 255), -1)       # Rød prik
+            cv2.putText(frame, "KRYDS", (cx - 30, cy - 20),
+                        cv2.FONT_HERSHEY_DUPLEX, 0.9, (255, 255, 255), 2)
+
+            # Udskriv position i centimeter
+            pos_cm_x = cx * cm_per_pixel
+            pos_cm_y = cy * cm_per_pixel
+            print(f"Kryds-position: ({cx:.1f}, {cy:.1f})")
 
     # Boundary box calculation
     if filtered_red_contours:
@@ -503,6 +522,11 @@ while True:
         area = cv2.contourArea(contour)
         if area > 100:
             x, y, w, h = cv2.boundingRect(contour)
+            if boundary_box is not None:
+                bx, by, bw, bh = boundary_box
+                if not (bx <= x <= bx + bw and by <= y <= by + bh):
+                    continue
+        
             cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 3)
             cv2.putText(frame, f"Back ({(x+w)/2},{(y+h)/2})", (x, y - 10),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
@@ -510,8 +534,15 @@ while True:
     # Process purple robot part
     for contour in purple_contours:
         area = cv2.contourArea(contour)
+
         if area > 100:
             x, y, w, h = cv2.boundingRect(contour)
+
+            if boundary_box is not None:
+                    bx, by, bw, bh = boundary_box
+                    if not (bx <= x <= bx + bw and by <= y <= by + bh):
+                        continue
+                    
             cv2.rectangle(frame, (x, y), (x + w, y + h), (255, 0, 255), 3)
             cv2.putText(frame, "Front", (x, y - 10),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 255), 2)
@@ -567,7 +598,7 @@ while True:
 
     # Display results
     cv2.imshow("Robot and Ball Detection", frame)
-    # cv2.imshow("Red Color Filter", red_mask)
+    cv2.imshow("Red Color Filter", red_mask)
     cv2.imshow("Green Color Filter", mask_green)
 
     # Distance calculation
