@@ -479,7 +479,7 @@ while True:
 
     boundary_box = None
 
-    # Identify cross shape
+    # Forbedret krydsgenkendelse (kun selve krydset, ikke hele boksen)
     for cnt in filtered_red_contours:
         area = cv2.contourArea(cnt)
         if area < 1000:
@@ -491,21 +491,23 @@ while True:
         hull_area = cv2.contourArea(hull)
         solidity = area / (hull_area + 1e-5)
 
-        # Kriterier for kryds: kvadratisk, ikke fyldt (hul i midten), stor nok
-        if 0.8 < aspect_ratio < 1.2 and 0.2 < solidity < 0.7:
-            cx = x + w // 2
-            cy = y + h // 2
+        # Kriterier for kryds: kvadratisk, ikke solid, ca. rigtig størrelse
+        if 0.6 < aspect_ratio < 1.4 and 0.15 < solidity < 0.8 and 7000 < area < 20000:
+            M = cv2.moments(cnt)
+            if M["m00"] == 0:
+                continue
+            cx = int(M["m10"] / M["m00"])
+            cy = int(M["m01"] / M["m00"])
 
-            # Markering
-            cv2.drawContours(frame, [cnt], -1, (0, 255, 255), 3)  # Gul kant
-            cv2.circle(frame, (cx, cy), 6, (0, 0, 255), -1)       # Rød prik
-            cv2.putText(frame, "KRYDS", (cx - 30, cy - 20),
+            # Marker krydset tydeligt
+            cv2.drawContours(frame, [cnt], -1, (0, 255, 255), 3)  # Gul kontur
+            cv2.circle(frame, (cx, cy), 6, (0, 0, 255), -1)       # Rød midte
+            cv2.putText(frame, "✖ KRYDS", (cx - 30, cy - 20),
                         cv2.FONT_HERSHEY_DUPLEX, 0.9, (255, 255, 255), 2)
 
-            # Udskriv position i centimeter
-            pos_cm_x = cx * cm_per_pixel
-            pos_cm_y = cy * cm_per_pixel
-            # print(f"Kryds-position: ({cx:.1f}, {cy:.1f})")
+            # Udskriv position i pixels (eller skift til cm hvis du vil)
+            print(f"Kryds-position: ({cx}, {cy}) pixels, area={area:.0f}")
+
 
     # Boundary box calculation
     if filtered_red_contours:
