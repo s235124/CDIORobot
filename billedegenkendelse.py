@@ -530,11 +530,11 @@ while True:
     # Apply morphology to robot masks
     kernel_robot = np.ones((3, 3), np.uint8)
     mask_green = cv2.morphologyEx(mask_green, cv2.MORPH_OPEN, kernel_robot)
-    # mask_purple = cv2.morphologyEx(mask_purple, cv2.MORPH_OPEN, kernel_robot)
+    mask_purple = cv2.morphologyEx(mask_purple, cv2.MORPH_OPEN, kernel_robot)
 
     # Find contours for both robot parts
     green_contours, _ = cv2.findContours(mask_green, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    # purple_contours, _ = cv2.findContours(mask_purple, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    purple_contours, _ = cv2.findContours(mask_purple, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     
     # Combine robot contours for exclusion zone
     robot_contours = green_contours + purple_contours
@@ -556,21 +556,21 @@ while True:
             cv2.putText(frame, f"Back ({(x+w)/2},{(y+h)/2})", (x, y - 10),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
 
-    # # Process purple robot part
-    # for contour in purple_contours:
-    #     area = cv2.contourArea(contour)
+    # Process purple robot part
+    for contour in purple_contours:
+        area = cv2.contourArea(contour)
 
-    #     if area > 100:
-    #         x, y, w, h = cv2.boundingRect(contour)
+        if area > 100:
+            x, y, w, h = cv2.boundingRect(contour)
 
-    #         if boundary_box is not None:
-    #                 bx, by, bw, bh = boundary_box
-    #                 if not (bx <= x <= bx + bw and by <= y <= by + bh):
-    #                     continue
+            if boundary_box is not None:
+                    bx, by, bw, bh = boundary_box
+                    if not (bx <= x <= bx + bw and by <= y <= by + bh):
+                        continue
                     
-    #         cv2.rectangle(frame, (x, y), (x + w, y + h), (255, 0, 255), 3)
-    #         cv2.putText(frame, "Front", (x, y - 10),
-    #                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 255), 2)
+            cv2.rectangle(frame, (x, y), (x + w, y + h), (255, 0, 255), 3)
+            cv2.putText(frame, "Front", (x, y - 10),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 255), 2)
 
     # Circle detection using V channel
     circles = cv2.HoughCircles(
