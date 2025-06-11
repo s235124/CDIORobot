@@ -4,7 +4,7 @@
 # import numpy as np
 # import math
 
-IPADDRESS = '169.254.187.202' # REMEMBER TO UPDATE THIS
+# IPADDRESS = '169.254.187.202' # REMEMBER TO UPDATE THIS
 
 # def send_coordinates_to_ev3(target_x, target_y):
 #     # Connect to the EV3 via SSH
@@ -153,7 +153,7 @@ IPADDRESS = '169.254.187.202' # REMEMBER TO UPDATE THIS
 import socket
 from pynput import keyboard
 
-HOST = '169.254.187.202'  # Replace with EV3 IP
+HOST = '169.254.182.1'  # Replace with EV3 IP
 PORT = 9999
 
 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -166,7 +166,7 @@ def send_command(cmd):
 
 def on_press(key):
     try:
-        if key.char in ['w', 's', 'a', 'd', 'q', 'r', 'f', 'g']:
+        if key.char in ['w', 's', 'a', 'd', 'q', 'r', 'f', 'k', 'g', 'i', 't']:
             mapping = {
                 'w': 'forward',
                 's': 'reverse',
@@ -175,6 +175,9 @@ def on_press(key):
                 'r': 'portopen',
                 'f': 'portclose',
                 'g': 'kick',
+                't': 'onemeter',
+                'i': 'slowforward',
+                'k': 'slowreverse',
                 'q': 'stop'
             }
             send_command(mapping[key.char])

@@ -3,12 +3,14 @@ from ev3dev2.sensor.lego import GyroSensor
 from ev3dev2.motor import *
 from time import sleep
 
+# CODE FOR MANUAL TESTING
+
 HOST = ''  # Listen on all interfaces
 PORT = 9999
 
 motor = MoveTank(OUTPUT_A, OUTPUT_C)
-port = MediumMotor(OUTPUT_B)
-shooter = MediumMotor(OUTPUT_D)
+port = MediumMotor(OUTPUT_D)
+shooter = MediumMotor(OUTPUT_B)
 motor.gyro = GyroSensor()
 motor.gyro.calibrate()
 
@@ -18,6 +20,11 @@ def handle_command(cmd):
         motor.on(30, 30)
     elif cmd == "reverse":
         motor.on(-30, -30)
+    elif cmd == "slowreverse":
+        motor.on(-10, -10)
+    elif cmd == "slowforward":
+        motor.on(10, 10)
+        port.on_for_seconds(speed=-10, seconds=1)
     elif cmd == "left":
         motor.on(-20, 20)
     elif cmd == "right":
@@ -30,10 +37,12 @@ def handle_command(cmd):
         port.on_for_seconds(speed=10, seconds=1)
     elif cmd == "portclose":
         port.on_for_seconds(speed=-10, seconds=1)
+    elif cmd == "onemeter":
+        motor.on_for_seconds(left_speed=80, right_speed=80, seconds=4)
     elif cmd == "kick":
-        shooter.on_for_seconds(speed=30, seconds=1)
+        shooter.on_for_seconds(speed=-30, seconds=0.5)
         sleep(0.5)
-        shooter.on_for_seconds(speed=-30, seconds=1)
+        shooter.on_for_seconds(speed=30, seconds=0.5)
 
 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
     s.bind((HOST, PORT))
@@ -45,71 +54,27 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         while True:
             data = conn.recv(1024).decode().strip()
             if not data:
-                break
+                exit()
             handle_command(data)
 
+# ACTUAL CODE FOR MOVING TO BALLS
 
+# def move_to_target(angle, seconds):
 
-# import sys
-# from ev3dev2.motor import MediumMotor, MoveTank, MoveSteering, OUTPUT_A, OUTPUT_C, SpeedPercent, OUTPUT_B, OUTPUT_D
-
-# tank = MoveTank(OUTPUT_A, OUTPUT_C)
-# tank.gyro = GyroSensor()
-# tank.gyro.calibrate()
-
-# def forward():
-#     tank.on_for_seconds(left_speed=40, right_speed=40, seconds=1)
-
-# def reverse():
-#     tank.on_for_seconds(left_speed=-40, right_speed=-40, seconds=1)
-
-# def left():
-#     tank.on_for_seconds(left_speed=-40, right_speed=40, seconds=1)
-
-# def right():
-#     tank.on_for_seconds(left_speed=40, right_speed=-40, seconds=1)
-
-# def stop():
-#     tank.off()
-#     exit()
-
-# if __name__ == "__main__":
-#     if len(sys.argv) > 1:
-#         command = sys.argv[1]
-#         if command == 'forward':
-#             forward()
-#         elif command == 'reverse':
-#             reverse()
-#         elif command == 'left':
-#             left()
-#         elif command == 'right':
-#             right()
-#         elif command == 'stop':
-#             stop()
-
-
-
-# FOR OLD VERSION
-# def move_to_target(x, y):
-#     angle = 90 # <-- This should be part of arg
-#     secondsToTurn = 1 # Need to figure out seconds,  also part of args
-
-#     print("Moving to target: {}, {}".format(x, y))
+#     print("Moving to target with angle: {} and seconds: {}".format(angle, seconds))
 #     tank = MoveTank(OUTPUT_A, OUTPUT_C)
 #     tank.gyro = GyroSensor()
 #     tank.gyro.calibrate()
 
-#     port = MediumMotor(OUTPUT_B)
-#     shooter = MediumMotor(OUTPUT_D)
-
-#     port.on_for_seconds(speed=10, seconds=1)
-#     tank.on_for_seconds(left_speed=30, right_speed=30, seconds=secondsToTurn)
-#     port.on_for_seconds(speed=-10, seconds=1)
-
+#     port = MediumMotor(OUTPUT_D)
+#     shooter = MediumMotor(OUTPUT_B)
+    
 #     tank.turn_degrees(speed=SpeedPercent(20), target_angle=angle)
+
+#     tank.on_for_seconds(left_speed=30, right_speed=30, seconds=seconds)
+
 #     port.on_for_seconds(speed=10, seconds=1)
-#     shooter.on_for_seconds(speed=10, seconds=1)
-#     shooter.on_for_seconds(speed=-10, seconds=1)
+#     tank.on_for_seconds(left_speed=30, right_speed=30, seconds=1)
 #     port.on_for_seconds(speed=-10, seconds=1)
 
 #     exit()
@@ -120,8 +85,8 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
 #     sys.exit(1)
 
 # try:
-#     target_x = int(sys.argv[1])
-#     target_y = int(sys.argv[2])
-#     move_to_target(target_x, target_y)
+#     angle = int(sys.argv[1])
+#     seconds = int(sys.argv[2])
+#     move_to_target(angle, seconds)
 # except ValueError:
 #     print("Invalid coordinates. Must be integers.")

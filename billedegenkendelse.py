@@ -360,6 +360,28 @@
 import cv2
 import numpy as np
 import math
+import paramiko
+
+IPADDRESS = '169.254.187.202' # REMEMBER TO UPDATE THIS
+
+def send_coordinates_to_ev3(angle, seconds):
+    # Connect to the EV3 via SSH
+    ssh_client = paramiko.SSHClient()
+    ssh_client.load_system_host_keys()
+    ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    ssh_client.connect(IPADDRESS, username='robot', password='maker')
+
+    # Command to update robot's movement based on the target coordinates
+    command = f'python3 /home/robot/Gruppe3CDIOPython/update_robot_position.py {angle} {seconds}'
+    stdin, stdout, stderr = ssh_client.exec_command(command)
+    
+    # Print output or errors (for debugging)
+    print("Sending coordinates:", angle, seconds)
+    print("STDOUT:", stdout.read().decode())
+    print("STDERR:", stderr.read().decode())
+
+    
+    ssh_client.close()
 
 def calculate_angle(p1, p2):
     dx = float(p2[0]) - float(p1[0])
@@ -483,7 +505,7 @@ while True:
             # Udskriv position i centimeter
             pos_cm_x = cx * cm_per_pixel
             pos_cm_y = cy * cm_per_pixel
-            print(f"Kryds-position: ({cx:.1f}, {cy:.1f})")
+            # print(f"Kryds-position: ({cx:.1f}, {cy:.1f})")
 
     # Boundary box calculation
     if filtered_red_contours:
@@ -503,20 +525,21 @@ while True:
 
     # Robot detection using HSV
     mask_green = cv2.inRange(hsv, lower_green, upper_green)
-    mask_purple = cv2.inRange(hsv, lower_purple, upper_purple)
+    # mask_purple = cv2.inRange(hsv, lower_purple, upper_purple)
     
     # Apply morphology to robot masks
     kernel_robot = np.ones((3, 3), np.uint8)
     mask_green = cv2.morphologyEx(mask_green, cv2.MORPH_OPEN, kernel_robot)
-    mask_purple = cv2.morphologyEx(mask_purple, cv2.MORPH_OPEN, kernel_robot)
+    # mask_purple = cv2.morphologyEx(mask_purple, cv2.MORPH_OPEN, kernel_robot)
 
     # Find contours for both robot parts
     green_contours, _ = cv2.findContours(mask_green, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    purple_contours, _ = cv2.findContours(mask_purple, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    # purple_contours, _ = cv2.findContours(mask_purple, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     
     # Combine robot contours for exclusion zone
     robot_contours = green_contours + purple_contours
 
+    robot_corners = []
     # Process green robot part
     for contour in green_contours:
         area = cv2.contourArea(contour)
@@ -526,26 +549,28 @@ while True:
                 bx, by, bw, bh = boundary_box
                 if not (bx <= x <= bx + bw and by <= y <= by + bh):
                     continue
-        
+            
+            robot_corners.append((x + w // 2, y + h // 2))
+
             cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 3)
             cv2.putText(frame, f"Back ({(x+w)/2},{(y+h)/2})", (x, y - 10),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
 
-    # Process purple robot part
-    for contour in purple_contours:
-        area = cv2.contourArea(contour)
+    # # Process purple robot part
+    # for contour in purple_contours:
+    #     area = cv2.contourArea(contour)
 
-        if area > 100:
-            x, y, w, h = cv2.boundingRect(contour)
+    #     if area > 100:
+    #         x, y, w, h = cv2.boundingRect(contour)
 
-            if boundary_box is not None:
-                    bx, by, bw, bh = boundary_box
-                    if not (bx <= x <= bx + bw and by <= y <= by + bh):
-                        continue
+    #         if boundary_box is not None:
+    #                 bx, by, bw, bh = boundary_box
+    #                 if not (bx <= x <= bx + bw and by <= y <= by + bh):
+    #                     continue
                     
-            cv2.rectangle(frame, (x, y), (x + w, y + h), (255, 0, 255), 3)
-            cv2.putText(frame, "Front", (x, y - 10),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 255), 2)
+    #         cv2.rectangle(frame, (x, y), (x + w, y + h), (255, 0, 255), 3)
+    #         cv2.putText(frame, "Front", (x, y - 10),
+    #                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 255), 2)
 
     # Circle detection using V channel
     circles = cv2.HoughCircles(
@@ -602,11 +627,35 @@ while True:
     cv2.imshow("Green Color Filter", mask_green)
 
     # Distance calculation
-    if cv2.waitKey(1) & 0xFF == ord('f') and len(filtered_circles) >= 2:
+    if cv2.waitKey(1) & 0xFF == ord('f') and green_contours:
+        x1, y1, r1 = filtered_circles[0][0], filtered_circles[0][1], filtered_circles[0][2]
+        x2, y2, r2 = green_contours[0][0], green_contours[0][1], green_contours[0][2]
+        
+        x1, y1 = float(x1), float(y1)
+        x2, y2 = float(x2), float(y2)
+
+        angleBtwCircles = calculate_angle((x1, y1), (x2, y2))
+
+        distance = np.sqrt((x2 - x1)**2 + (y2 - y1)**2)
+        print(f"Angle and Distance between robot ({x1}, {y1}) and ball ({x2}, {y2}): {angleBtwCircles:.2f} px, {distance * cm_per_pixel:.2f} cm")
+
+        # Calculate seconds based on distance
+        ROBOTSPEEDAT30PERCENT = 13.9779 # cm/s at 30% speed
+        sec = distance * cm_per_pixel / ROBOTSPEEDAT30PERCENT
+
+        send_coordinates_to_ev3(angleBtwCircles, sec)
+
+    elif cv2.waitKey(1) & 0xFF == ord('f') and len(filtered_circles) >= 2:
         x1, y1, r1 = filtered_circles[0][0], filtered_circles[0][1], filtered_circles[0][2]
         x2, y2, r2 = filtered_circles[1][0], filtered_circles[1][1], filtered_circles[1][2]
+        
+        x1, y1 = float(x1), float(y1)
+        x2, y2 = float(x2), float(y2)
+
+        angleBtwCircles = calculate_angle((x1, y1), (x2, y2))
+
         distance = np.sqrt((x2 - x1)**2 + (y2 - y1)**2)
-        print(f"Distance between centers: {distance:.2f} px, {distance * cm_per_pixel:.2f} cm")
+        print(f"Distance between balls ({x1}, {y1}) and ({x2}, {y2}): {distance:.2f} px, {distance * cm_per_pixel:.2f} cm")
 
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
