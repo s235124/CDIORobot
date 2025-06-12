@@ -37,6 +37,10 @@ def calculate_distance(p1, p2):
     return np.sqrt(dx**2 + dy**2)
 
 def is_in_robot(green_contours, yellow_contours, circlex, circley):
+    if not green_contours or not yellow_contours:
+        print("No robot parts detected")
+        return False
+    
     topx, topy, topw, toph = cv2.boundingRect(yellow_contours[0])
 
     top = ((topx + topw) / 2, (topy + toph) / 2)
@@ -85,12 +89,12 @@ def is_in_robot(green_contours, yellow_contours, circlex, circley):
 
     if (bottomy < topy):
         print("Robot is upside down")
-        if (rightx < circlex < leftx) and (righty < circley < lefty):
+        if (rightx - 20 < circlex < leftx + 20) and (righty - 20 < circley < lefty + 20):
             print("Circle is in the robot area")
             return True
     elif (bottomy > topy):
         print("Robot is right side up")
-        if (leftx < circlex < rightx) and (lefty < circley < righty):
+        if (leftx - 20 < circlex < rightx + 20) and (lefty - 20 < circley < righty + 20):
             print("Circle is in the robot area")
             return True
         
@@ -388,9 +392,6 @@ while True:
         angle = calculate_angle(robot_front[0], robot_back[0])
 
         print(f"Distance and Angle between robot front and back: {dist:.2f} px and {angle} degrees at points {robot_front[0]} and {robot_back[0]}")
-    
-    if cv2.waitKey(1) & 0xFF == ord('d'):
-        is_in_robot(green_contours, pink_contours)
 
     # Exit on 'q'
     if cv2.waitKey(1) & 0xFF == ord('q'):
