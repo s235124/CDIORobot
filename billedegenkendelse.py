@@ -194,34 +194,20 @@ while True:
 
     boundary_box = None
 
-    # Forbedret krydsgenkendelse (kun selve krydset, ikke hele boksen)
+    # Add this block just after filtering red contours
     for cnt in filtered_red_contours:
-        area = cv2.contourArea(cnt)
-        if area < 1000:
-            continue
-
-        x, y, w, h = cv2.boundingRect(cnt)
-        aspect_ratio = w / float(h)
-        hull = cv2.convexHull(cnt)
-        hull_area = cv2.contourArea(hull)
-        solidity = area / (hull_area + 1e-5)
-
-        # Kriterier for kryds: kvadratisk, ikke solid, ca. rigtig størrelse
-        if 0.6 < aspect_ratio < 1.4 and 0.15 < solidity < 0.8 and 7000 < area < 20000:
+        approx = cv2.approxPolyDP(cnt, 0.02 * cv2.arcLength(cnt, True), True)
+        if len(approx) == 12:
             M = cv2.moments(cnt)
             if M["m00"] == 0:
                 continue
             cx = int(M["m10"] / M["m00"])
             cy = int(M["m01"] / M["m00"])
 
-            # Marker krydset tydeligt
-            cv2.drawContours(frame, [cnt], -1, (0, 255, 255), 3)  # Gul kontur
-            cv2.circle(frame, (cx, cy), 6, (0, 0, 255), -1)       # Rød midte
-            cv2.putText(frame, "KRYDS", (cx - 30, cy - 20),
-                        cv2.FONT_HERSHEY_DUPLEX, 0.9, (255, 255, 255), 2)
-
-            # Udskriv position i pixels (eller skift til cm hvis du vil)
-            # print(f"Kryds-position: ({cx}, {cy}) pixels, area={area:.0f}")
+            cv2.drawContours(frame, [cnt], -1, (0, 255, 0), 3)
+            cv2.putText(frame, "CROSS", (cx - 40, cy - 20),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+            print(f"✅ KRYDS GENKENDT via approxPolyDP: ({cx}, {cy}), hjørner={len(approx)}")
 
 
     # Boundary box calculation
