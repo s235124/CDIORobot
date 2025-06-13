@@ -3,7 +3,7 @@ import numpy as np
 import math
 import paramiko
 
-IPADDRESS = '169.254.187.202' # REMEMBER TO UPDATE THIS
+IPADDRESS = '169.254.181.22' # REMEMBER TO UPDATE THIS
 
 def send_coordinates_to_ev3(angle, seconds):
     # Connect to the EV3 via SSH
@@ -17,7 +17,7 @@ def send_coordinates_to_ev3(angle, seconds):
     stdin, stdout, stderr = ssh_client.exec_command(command)
     
     # Print output or errors (for debugging)
-    print("Sending coordinates:", angle, seconds)
+    print("Sending angle and seconds:", angle, seconds)
     print("STDOUT:", stdout.read().decode())
     print("STDERR:", stderr.read().decode())
 
@@ -27,18 +27,19 @@ def send_coordinates_to_ev3(angle, seconds):
 def calculate_angle(p1, p2):
     dx = float(p2[0]) - float(p1[0])
     dy = float(p2[1]) - float(p1[1])
-    radians = math.atan2(dx, dy)
+    radians = math.atan2(dy, dx)
     degrees = math.degrees(radians)
-    return degrees % 360
+    print(f"Calculated angle: {degrees} degrees")
+    return (degrees % 360)
 
 def calculate_distance(p1, p2):
     dx = float(p2[0]) - float(p1[0])
     dy = float(p2[1]) - float(p1[1])
     return np.sqrt(dx**2 + dy**2)
 
-def is_in_robot(green_contours, yellow_contours, circlex, circley):
+def find_robot(green_contours, yellow_contours):
     if not green_contours or not yellow_contours:
-        print("No robot parts detected")
+        # print("No robot parts detected")
         return False
     
     topx, topy, topw, toph = cv2.boundingRect(yellow_contours[0])
@@ -83,22 +84,35 @@ def is_in_robot(green_contours, yellow_contours, circlex, circley):
     right = (rightx, righty)
     bottom = (bottomx, bottomy)
     left = (leftx, lefty)
-    angle = calculate_angle(bottom, top)
 
-    # print(f"Robot found at top: {top}, right: {right}, left: {left}, bottom: {bottom}, angle: {angle:.2f} degrees")
+    return top, right, left, bottom
+
+
+def is_in_robot(green_contours, yellow_contours, circlex, circley):
+
+    try:
+        top, right, left, bottom = find_robot(green_contours, yellow_contours)
+    except Exception as e:
+        # print("Error finding robot:", e)
+        return False
+        
+    bottomx, bottomy = bottom
+    leftx, lefty = left
+    rightx, righty = right
+    topx, topy = top
 
     if (bottomy < topy):
-        print("Robot is upside down")
-        if (rightx - 20 < circlex < leftx + 20) and (righty - 20 < circley < lefty + 20):
-            print("Circle is in the robot area")
+        # print("Robot is upside down")
+        if (rightx - 30 < circlex < leftx + 30) and (righty - 30 < circley < lefty + 30):
+            # print("Circle is in the robot area")
             return True
     elif (bottomy > topy):
-        print("Robot is right side up")
-        if (leftx - 20 < circlex < rightx + 20) and (lefty - 20 < circley < righty + 20):
-            print("Circle is in the robot area")
+        # print("Robot is right side up")
+        if (leftx - 30 < circlex < rightx + 30) and (lefty - 30 < circley < righty + 30):
+            # print("Circle is in the robot area")
             return True
         
-    print("Circle is NOT in the robot area")
+    # print("Circle is NOT in the robot area")
     return False
 
 # Camera setup
@@ -194,22 +208,6 @@ while True:
 
     boundary_box = None
 
-    # Add this block just after filtering red contours
-    for cnt in filtered_red_contours:
-        approx = cv2.approxPolyDP(cnt, 0.02 * cv2.arcLength(cnt, True), True)
-        if len(approx) == 12:
-            M = cv2.moments(cnt)
-            if M["m00"] == 0:
-                continue
-            cx = int(M["m10"] / M["m00"])
-            cy = int(M["m01"] / M["m00"])
-
-            cv2.drawContours(frame, [cnt], -1, (0, 255, 0), 3)
-            cv2.putText(frame, "CROSS", (cx - 40, cy - 20),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
-            print(f"✅ KRYDS GENKENDT via approxPolyDP: ({cx}, {cy}), hjørner={len(approx)}")
-
-
     # Boundary box calculation
     if filtered_red_contours:
         all_points = np.vstack(filtered_red_contours)
@@ -225,6 +223,52 @@ while True:
         x, y, w, h = boundary_box
         cv2.putText(frame, "Wall Boundary", (x, y - 10),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
+
+    mask_inside_wall = np.zeros_like(red_mask)
+    cv2.fillPoly(mask_inside_wall, [inward_box], 255)
+    red_mask_inside = cv2.bitwise_and(red_mask, mask_inside_wall)
+
+    # Now use the inner mask to find potential cross contours
+    red_contours, _ = cv2.findContours(red_mask_inside, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+    frame_h, frame_w = frame.shape[:2]
+    frame_center = (frame_w // 2, frame_h // 2)
+
+    closest_cross = None
+    closest_distance = float('inf')
+    cross_center = (0, 0)
+
+    for cnt in red_contours:
+        if cnt is None or cnt.size == 0 or cnt.shape[0] < 3:
+            continue
+
+        if cv2.contourArea(cnt) < 100:
+            continue
+
+        approx = cv2.approxPolyDP(cnt, 0.02 * cv2.arcLength(cnt, True), True)
+
+        # You can modify this condition depending on your shape
+        if 10 <= len(approx) <= 14:
+            M = cv2.moments(cnt)
+            if M["m00"] == 0:
+                continue
+            cx = int(M["m10"] / M["m00"])
+            cy = int(M["m01"] / M["m00"])
+
+            # Compute distance to frame center
+            dist_to_center = np.sqrt((cx - frame_center[0])**2 + (cy - frame_center[1])**2)
+
+            if dist_to_center < closest_distance:
+                closest_distance = dist_to_center
+                closest_cross = cnt
+                cross_center = (cx, cy)
+
+    # Draw only the most centered valid cross
+    if closest_cross is not None:
+        cv2.drawContours(frame, [closest_cross], -1, (0, 255, 0), 3)
+        cv2.putText(frame, "CROSS", (cross_center[0] - 40, cross_center[1] - 20),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+        # print(f"✅ KRYDS GENKENDT i midten: ({cross_center[0]}, {cross_center[1]}), hjørner={len(approx)}")
 
     # Robot detection using HSV
     mask_green = cv2.inRange(hsv, lower_green, upper_green)
@@ -336,41 +380,55 @@ while True:
                             cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 0), 2)
 
     # Display results
-    cv2.imshow("Red Color Filter", red_mask)
-    cv2.imshow("Green Color Filter", mask_green)
+    # cv2.imshow("Red Color Filter", red_mask)
+    # cv2.imshow("Green Color Filter", mask_green)
+    # cv2.imshow("Red inside Filter", red_mask_inside)
     cv2.imshow("Robot and Ball Detection", frame)
 
     # Distance calculation
     if cv2.waitKey(1) & 0xFF == ord('f') and green_contours:
-        x1, y1, r1 = filtered_circles[0][0], filtered_circles[0][1], filtered_circles[0][2]
-        x2, y2, r2 = green_contours[0][0], green_contours[0][1], green_contours[0][2]
+
+        if not filtered_circles:
+            # print("No circles detected")
+            continue
+
+        x1, y1, r1 = 0, 0, 0
+
+        for circle in filtered_circles:
+            if circle[2] < (ball_radius_px * 1.2):
+                x1, y1, r1 = circle[0], circle[1], circle[2]
+                break
+        top, right, left, bottom = find_robot(green_contours, pink_contours)
         
         x1, y1 = float(x1), float(y1)
-        x2, y2 = float(x2), float(y2)
+        x2, y2 = float(bottom[0]), float(bottom[1])
 
-        angleBtwCircles = calculate_angle((x1, y1), (x2, y2))
+        angleOfRobot = calculate_angle((bottom[0],bottom[1]), (top[0], top[1]))
+        angleBtwBallAndRobot = calculate_angle((x2, y2), (x1, y1))
 
-        distanceBtwCircles = np.sqrt((x2 - x1)**2 + (y2 - y1)**2)
-        print(f"Angle and Distance between robot ({x1}, {y1}) and ball ({x2}, {y2}): {angleBtwCircles:.2f} px, {distanceBtwCircles * cm_per_pixel:.2f} cm")
+        distanceBtwCircleAndRobot = calculate_distance((x1, y1), (x2, y2))
 
         # Calculate seconds based on distance
         ROBOTSPEEDAT30PERCENT = 13.9779 # cm/s at 30% speed
-        sec = distanceBtwCircles * cm_per_pixel / ROBOTSPEEDAT30PERCENT
+        sec = (distanceBtwCircleAndRobot * cm_per_pixel) / ROBOTSPEEDAT30PERCENT
 
-        send_coordinates_to_ev3(angleBtwCircles, sec)
+        angleToMove = angleOfRobot - angleBtwBallAndRobot
 
-    elif cv2.waitKey(1) & 0xFF == ord('f') and len(filtered_circles) >= 2:
-        x1, y1, r1 = filtered_circles[0][0], filtered_circles[0][1], filtered_circles[0][2]
-        x2, y2, r2 = filtered_circles[1][0], filtered_circles[1][1], filtered_circles[1][2]
-        
-        x1, y1 = float(x1), float(y1)
-        x2, y2 = float(x2), float(y2)
+        # print(f"Angle before: {angleToMove:.2f} degrees")
 
-        angleBtwCircles = calculate_angle((x1, y1), (x2, y2))
+        # if angleToMove < 0:
+        #     angleToMove += 360
+        # elif angleToMove > 360:
+        #     angleToMove -= 360
 
-        distanceBtwCircles = np.sqrt((x2 - x1)**2 + (y2 - y1)**2)
-        print(f"Distance between balls ({x1}, {y1}) and ({x2}, {y2}): {distanceBtwCircles:.2f} px, {distanceBtwCircles * cm_per_pixel:.2f} cm")
+        # print(f"Angle to move after: {angleToMove:.2f} degrees")
 
+        print(f"Angle and Distance between robot ({x2}, {y2}) and ball ({x1}, {y1}): {angleToMove:.2f}, {distanceBtwCircleAndRobot * cm_per_pixel:.2f} cm")
+        sec = int(sec)
+        angleToMove = int(angleToMove)
+
+        send_coordinates_to_ev3(angleToMove, sec)
+ 
     if cv2.waitKey(1) & 0xFF == ord('x'):
         print("Robot coords:", robot_front, robot_back)
         
