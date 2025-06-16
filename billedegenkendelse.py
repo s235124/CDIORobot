@@ -3,7 +3,7 @@ import numpy as np
 import math
 import paramiko
 
-IPADDRESS = '169.254.181.22' # REMEMBER TO UPDATE THIS
+IPADDRESS = '169.254.61.10' # REMEMBER TO UPDATE THIS
 
 def send_coordinates_to_ev3(angle, seconds):
     # Connect to the EV3 via SSH
@@ -20,17 +20,42 @@ def send_coordinates_to_ev3(angle, seconds):
     print("Sending angle and seconds:", angle, seconds)
     print("STDOUT:", stdout.read().decode())
     print("STDERR:", stderr.read().decode())
-
     
     ssh_client.close()
 
-def calculate_angle(p1, p2):
-    dx = float(p2[0]) - float(p1[0])
-    dy = float(p2[1]) - float(p1[1])
-    radians = math.atan2(dy, dx)
-    degrees = math.degrees(radians)
-    print(f"Calculated angle: {degrees} degrees")
-    return (degrees % 360)
+def calculate_rotation_angle(front, back, ball, return_degrees=True):
+    # Calculate vectors
+    print(f"Front: {front}, Back: {back}, Ball: {ball}")
+
+    vec_orientation = (front[0] - back[0], front[1] - back[1])
+    vec_to_ball = (ball[0] - back[0], ball[1] - back[1])
+    
+    # Compute dot product and determinant
+    dot = vec_orientation[0] * vec_to_ball[0] + vec_orientation[1] * vec_to_ball[1]
+    det = vec_orientation[0] * vec_to_ball[1] - vec_orientation[1] * vec_to_ball[0]
+    
+    # Calculate angle in radians
+    angle_rad = math.atan2(det, dot)
+    
+    # Convert to degrees if requested
+    retval = math.degrees(angle_rad) if return_degrees else angle_rad
+    print(f"retval: {retval}")
+    return retval
+
+# Example usage with your coordinates
+# back = (655.5, 223.0)
+# front = (584.0, 180.5)
+# ball = (808.0, 654.0)
+
+# angle = calculate_rotation_angle(front, back, ball)
+# print(f"Rotation angle: {angle:.2f} degrees")
+
+# def calculate_angle(p1, p2):
+#     dx = float(p2[0]) - float(p1[0])
+#     dy = float(p2[1]) - float(p1[1])
+#     radians = math.atan2(dx, dy)  #dx and dy is swapped for new coordinate logic
+#     degrees = math.degrees(radians)
+#     return degrees % 360
 
 def calculate_distance(p1, p2):
     dx = float(p2[0]) - float(p1[0])
@@ -44,7 +69,7 @@ def find_robot(green_contours, yellow_contours):
     
     topx, topy, topw, toph = cv2.boundingRect(yellow_contours[0])
 
-    top = ((topx + topw) / 2, (topy + toph) / 2)
+    top = (topx + (topw / 2), topy + (toph / 2))
 
     shortest_distance = 0
     longest_distance = 0
@@ -58,28 +83,28 @@ def find_robot(green_contours, yellow_contours):
     for green_cont in green_contours:
         x, y, w, h = cv2.boundingRect(green_cont)
 
-        dist = calculate_distance(top, ((x + w) / 2, (y + h) / 2))
+        dist = calculate_distance(top, (x + w / 2, y + h / 2))
         if shortest_distance == 0 or dist < shortest_distance:
             shortest_distance = dist
-            rightx = (x + w) / 2
-            righty = (y + h) / 2
+            rightx = x + w / 2
+            righty = y + h / 2
 
     for green_cont in green_contours:
         x, y, w, h = cv2.boundingRect(green_cont)
 
-        dist = calculate_distance(top, ((x + w) / 2, (y + h) / 2))
+        dist = calculate_distance(top, (x + w / 2, y + h / 2))
         if longest_distance == 0 or dist > longest_distance:
             longest_distance = dist
-            bottomx = (x + w) / 2
-            bottomy = (y + h) / 2
+            bottomx = x + w / 2
+            bottomy = y + h / 2
 
     for green_cont in green_contours:
         x, y, w, h = cv2.boundingRect(green_cont)
 
-        dist = calculate_distance(top, ((x + w) / 2, (y + h) / 2))
+        dist = calculate_distance(top, (x + w / 2, y + h / 2))
         if shortest_distance < dist < longest_distance:
-            leftx = (x + w) / 2
-            lefty = (y + h) / 2
+            leftx = x + w / 2
+            lefty = y + h / 2
         
     right = (rightx, righty)
     bottom = (bottomx, bottomy)
@@ -120,7 +145,7 @@ kamera = cv2.VideoCapture(0)
 kamera.set(cv2.CAP_PROP_FRAME_WIDTH, 1920)
 kamera.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080)
 kamera.set(cv2.CAP_PROP_AUTO_EXPOSURE, 0.25)
-kamera.set(cv2.CAP_PROP_EXPOSURE, -6)
+kamera.set(cv2.CAP_PROP_EXPOSURE, -2)
 
 # Global variables for calibration
 calibration_done = False
@@ -304,10 +329,10 @@ while True:
                 if not (bx <= x <= bx + bw and by <= y <= by + bh):
                     continue
             
-            robot_front.append(((x + w) / 2, (y + h) / 2))
+            robot_front.append((x + w / 2, y + h / 2))
 
             cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 3)
-            cv2.putText(frame, f"Back ({(x+w)/2},{(y+h)/2})", (x, y - 10),
+            cv2.putText(frame, f"Back ({x+w/2},{y+h/2})", (x, y - 10),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
 
     # Process yellow robot part
@@ -322,11 +347,11 @@ while True:
                     if not (bx <= x <= bx + bw and by <= y <= by + bh):
                         continue
                     
-            robot_back.append(((x + w) / 2, (y + h) / 2))
+            robot_back.append((x + w / 2, y + h / 2))
             
 
             cv2.rectangle(frame, (x, y), (x + w, y + h), (255, 0, 255), 3)
-            cv2.putText(frame, f"Front ({(x+w)/2},{(y+h)/2})", (x, y - 10),
+            cv2.putText(frame, f"Front ({x+w/2},{y+h/2})", (x, y - 10),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 255), 2)
 
     # Circle detection using V channel
@@ -392,50 +417,50 @@ while True:
             # print("No circles detected")
             continue
 
-        x1, y1, r1 = 0, 0, 0
+        x1, y1= 0, 0
+
+        shortest_distance = 0
+
+        top, right, left, bottom = find_robot(green_contours, pink_contours)
+
+        circleFound = False
 
         for circle in filtered_circles:
             if circle[2] < (ball_radius_px * 1.2):
-                x1, y1, r1 = circle[0], circle[1], circle[2]
-                break
-        top, right, left, bottom = find_robot(green_contours, pink_contours)
-        
+                x, y, r = circle[0], circle[1], circle[2]
+
+                dist = calculate_distance(bottom, (x, y))
+                if shortest_distance == 0 or dist < shortest_distance:
+                    shortest_distance = dist
+                    x1, y1 = x, y
+                    print(f"Circle found at ({x1}, {y1}) with distance {dist}")
+                    
         x1, y1 = float(x1), float(y1)
         x2, y2 = float(bottom[0]), float(bottom[1])
 
-        angleOfRobot = calculate_angle((bottom[0],bottom[1]), (top[0], top[1]))
-        angleBtwBallAndRobot = calculate_angle((x2, y2), (x1, y1))
-
+        distanceOfRobot =  calculate_distance((top[0], top[1]), (bottom[0], bottom[1]))
         distanceBtwCircleAndRobot = calculate_distance((x1, y1), (x2, y2))
 
         # Calculate seconds based on distance
-        ROBOTSPEEDAT30PERCENT = 13.9779 # cm/s at 30% speed
-        sec = (distanceBtwCircleAndRobot * cm_per_pixel) / ROBOTSPEEDAT30PERCENT
+        ROBOTSPEEDAT30PERCENT = 25
+        print(f"{(distanceBtwCircleAndRobot * cm_per_pixel)} / {ROBOTSPEEDAT30PERCENT}")
+        sec = float((distanceBtwCircleAndRobot * cm_per_pixel) / ROBOTSPEEDAT30PERCENT)
 
-        angleToMove = angleOfRobot - angleBtwBallAndRobot
-
-        # print(f"Angle before: {angleToMove:.2f} degrees")
-
-        # if angleToMove < 0:
-        #     angleToMove += 360
-        # elif angleToMove > 360:
-        #     angleToMove -= 360
-
-        # print(f"Angle to move after: {angleToMove:.2f} degrees")
-
-        print(f"Angle and Distance between robot ({x2}, {y2}) and ball ({x1}, {y1}): {angleToMove:.2f}, {distanceBtwCircleAndRobot * cm_per_pixel:.2f} cm")
-        sec = int(sec)
+        angleToMove = calculate_rotation_angle((top[0],top[1]), (bottom[0],bottom[1]), (x1, y1))
+        angleToMove = angleToMove*.99
         angleToMove = int(angleToMove)
+        
+        print(f"Angle and Distance between robot back ({x2}, {y2}), robot front ({top[0]}, {top[1]}) and ball ({x1}, {y1}): {angleToMove:.2f}, {distanceBtwCircleAndRobot * cm_per_pixel:.2f} cm")
 
         send_coordinates_to_ev3(angleToMove, sec)
  
-    if cv2.waitKey(1) & 0xFF == ord('x'):
-        print("Robot coords:", robot_front, robot_back)
+    # if cv2.waitKey(1) & 0xFF == ord('x'):
+    #     print("Robot coords:", robot_front, robot_back)
         
-        dist = calculate_distance(robot_front[0], robot_back[0])
-        angle = calculate_angle(robot_front[0], robot_back[0])
+    #     dist = calculate_distance(robot_front[0], robot_back[0])
+    #     angle = calculate_angle(robot_front[0], robot_back[0])
 
-        print(f"Distance and Angle between robot front and back: {dist:.2f} px and {angle} degrees at points {robot_front[0]} and {robot_back[0]}")
+    #     print(f"Distance and Angle between robot front and back: {dist:.2f} px and {angle} degrees at points {robot_front[0]} and {robot_back[0]}")
 
     # Exit on 'q'
     if cv2.waitKey(1) & 0xFF == ord('q'):

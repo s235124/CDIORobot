@@ -62,12 +62,12 @@ from time import sleep
 
 def move_to_target(angle, seconds):
 
-    print("Moving to target with angle: {} degrees and {} seconds".format(angle, seconds))
+    print("Moving to target with angle: {} degrees".format(angle))
 
     spkr = Sound()
 
     spkr.set_volume(100)
-    spkr.speak("Moving to target with angle: {} degrees and seconds: {} seconds".format(angle, seconds))
+    spkr.speak("Moving to target")
 
     tank = MoveTank(OUTPUT_A, OUTPUT_C)
     tank.gyro = GyroSensor()
@@ -76,13 +76,13 @@ def move_to_target(angle, seconds):
     port = MediumMotor(OUTPUT_D)
     shooter = MediumMotor(OUTPUT_B)
     
-    tank.turn_degrees(speed=SpeedPercent(20), target_angle=angle)
+    tank.turn_degrees(speed=SpeedPercent(5), target_angle=angle)
 
-    # tank.on_for_seconds(left_speed=30, right_speed=30, seconds=seconds)
+    tank.on_for_seconds(left_speed=25, right_speed=25, seconds=seconds)
 
-    # port.on_for_seconds(speed=10, seconds=1)
-    # tank.on_for_seconds(left_speed=30, right_speed=30, seconds=1)
-    # port.on_for_seconds(speed=-10, seconds=1)
+    port.on_for_seconds(speed=10, seconds=1)
+    tank.on_for_seconds(left_speed=10, right_speed=10, seconds=2)
+    port.on_for_seconds(speed=-10, seconds=1)
 
     exit()
 
@@ -93,7 +93,7 @@ if len(sys.argv) < 3:
 
 try:
     angle = int(sys.argv[1])
-    seconds = int(sys.argv[2])
+    seconds = float(sys.argv[2])
     move_to_target(angle, seconds)
 except ValueError:
     print("Invalid coordinates. Must be integers.")
