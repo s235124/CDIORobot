@@ -66,8 +66,8 @@ def move_to_target(angle, seconds):
 
     spkr = Sound()
 
-    spkr.set_volume(100)
-    spkr.speak("Moving to target")
+    # spkr.set_volume(100)
+    # spkr.speak("Moving to target")
 
     tank = MoveTank(OUTPUT_A, OUTPUT_C)
     tank.gyro = GyroSensor()
@@ -78,7 +78,7 @@ def move_to_target(angle, seconds):
     
     tank.turn_degrees(speed=SpeedPercent(5), target_angle=angle)
 
-    tank.on_for_seconds(left_speed=25, right_speed=25, seconds=seconds)
+    tank.on_for_seconds(left_speed=30, right_speed=30, seconds=seconds)
 
     port.on_for_seconds(speed=10, seconds=1)
     tank.on_for_seconds(left_speed=10, right_speed=10, seconds=2)

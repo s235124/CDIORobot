@@ -3,15 +3,27 @@ import numpy as np
 import math
 import paramiko
 
-IPADDRESS = '169.254.61.10' # REMEMBER TO UPDATE THIS
+IPADDRESS = '169.254.80.77' # REMEMBER TO UPDATE THIS
+ssh_client = None
 
-def send_coordinates_to_ev3(angle, seconds):
+def open_SSH_connection():
     # Connect to the EV3 via SSH
+    print("Connecting to EV3 at", IPADDRESS)
+    global ssh_client
     ssh_client = paramiko.SSHClient()
     ssh_client.load_system_host_keys()
     ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
     ssh_client.connect(IPADDRESS, username='robot', password='maker')
 
+    command = f'python3 /home/robot/Gruppe3CDIOPython/first.py'
+    stdin, stdout, stderr = ssh_client.exec_command(command)
+    
+    # Print output or errors (for debugging)
+    # print("STDOUT:", stdout.read().decode())
+    # print("STDERR:", stderr.read().decode())
+
+
+def send_coordinates_to_ev3(angle, seconds):
     # Command to update robot's movement based on the target coordinates
     command = f'python3 /home/robot/Gruppe3CDIOPython/update_robot_position.py {angle} {seconds}'
     stdin, stdout, stderr = ssh_client.exec_command(command)
@@ -20,7 +32,10 @@ def send_coordinates_to_ev3(angle, seconds):
     print("Sending angle and seconds:", angle, seconds)
     print("STDOUT:", stdout.read().decode())
     print("STDERR:", stderr.read().decode())
-    
+
+def close_SSH_connection():
+    # Close the SSH connection
+    print("Closing SSH connection")
     ssh_client.close()
 
 def calculate_rotation_angle(front, back, ball, return_degrees=True):
@@ -50,108 +65,100 @@ def calculate_rotation_angle(front, back, ball, return_degrees=True):
 # angle = calculate_rotation_angle(front, back, ball)
 # print(f"Rotation angle: {angle:.2f} degrees")
 
-# def calculate_angle(p1, p2):
-#     dx = float(p2[0]) - float(p1[0])
-#     dy = float(p2[1]) - float(p1[1])
-#     radians = math.atan2(dx, dy)  #dx and dy is swapped for new coordinate logic
-#     degrees = math.degrees(radians)
-#     return degrees % 360
-
 def calculate_distance(p1, p2):
     dx = float(p2[0]) - float(p1[0])
     dy = float(p2[1]) - float(p1[1])
-    return np.sqrt(dx**2 + dy**2)
+    return np.sqrt((dx)**2 + (dy)**2)
 
-def find_robot(green_contours, yellow_contours):
-    if not green_contours or not yellow_contours:
+def find_robot(green_contours, pink_contours, boundary_box):
+    if not green_contours or not pink_contours:
         # print("No robot parts detected")
         return False
     
-    topx, topy, topw, toph = cv2.boundingRect(yellow_contours[0])
+    topx, topy, topw, toph = cv2.boundingRect(pink_contours[0])
 
     top = (topx + (topw / 2), topy + (toph / 2))
 
     shortest_distance = 0
     longest_distance = 0
-    rightx = 0
-    righty = 0
-    leftx = 0
-    lefty = 0
     bottomx = 0
     bottomy = 0
 
-    for green_cont in green_contours:
-        x, y, w, h = cv2.boundingRect(green_cont)
-
-        dist = calculate_distance(top, (x + w / 2, y + h / 2))
-        if shortest_distance == 0 or dist < shortest_distance:
-            shortest_distance = dist
-            rightx = x + w / 2
-            righty = y + h / 2
 
     for green_cont in green_contours:
         x, y, w, h = cv2.boundingRect(green_cont)
+
+        if boundary_box is not None:
+                bx, by, bw, bh = boundary_box
+                if not (bx <= x <= bx + bw and by <= y <= by + bh):
+                    continue
 
         dist = calculate_distance(top, (x + w / 2, y + h / 2))
         if longest_distance == 0 or dist > longest_distance:
             longest_distance = dist
             bottomx = x + w / 2
             bottomy = y + h / 2
-
-    for green_cont in green_contours:
-        x, y, w, h = cv2.boundingRect(green_cont)
-
-        dist = calculate_distance(top, (x + w / 2, y + h / 2))
-        if shortest_distance < dist < longest_distance:
-            leftx = x + w / 2
-            lefty = y + h / 2
         
-    right = (rightx, righty)
     bottom = (bottomx, bottomy)
-    left = (leftx, lefty)
 
-    return top, right, left, bottom
+    return top, bottom
 
+def is_in_robot(green_contours, pink_contours, circlex, circley, boundary_box):
 
-def is_in_robot(green_contours, yellow_contours, circlex, circley):
-
-    try:
-        top, right, left, bottom = find_robot(green_contours, yellow_contours)
-    except Exception as e:
-        # print("Error finding robot:", e)
-        return False
+    # try:
+    #     top, bottom = find_robot(green_contours, pink_contours, boundary_box)
+    # except Exception as e:
+    #     # print("Error finding robot:", e)
+    #     return False
         
-    bottomx, bottomy = bottom
-    leftx, lefty = left
-    rightx, righty = right
-    topx, topy = top
+    # bottomx, bottomy = bottom
+    # topx, topy = top
 
-    if (bottomy < topy):
-        # print("Robot is upside down")
-        if (rightx - 30 < circlex < leftx + 30) and (righty - 30 < circley < lefty + 30):
-            # print("Circle is in the robot area")
-            return True
-    elif (bottomy > topy):
-        # print("Robot is right side up")
-        if (leftx - 30 < circlex < rightx + 30) and (lefty - 30 < circley < righty + 30):
-            # print("Circle is in the robot area")
-            return True
+    # marginOfError = 50
+
+    # if (bottomy < topy):
+    #     # print("Robot is upside down")
+    #     if (rightx - marginOfError < circlex < leftx + marginOfError) and (righty - marginOfError < circley < lefty + marginOfError):
+    #         # print("Circle is in the robot area")
+    #         return True
+    # elif (bottomy > topy):
+    #     # print("Robot is right side up")
+    #     if (leftx - marginOfError < circlex < rightx + marginOfError) and (lefty - marginOfError < circley < righty + marginOfError):
+    #         # print("Circle is in the robot area")
+    #         return True
         
     # print("Circle is NOT in the robot area")
     return False
+
+def check_if_hit_obstacle(bottom, ball):
+    rise = ball[1] - bottom[1]
+    run = ball[0] - bottom[0]
+
+    if run == 0:
+        # Avoid division by zero
+        return False
+    
+    slope = rise / run
+
+
+    pass
 
 # Camera setup
 kamera = cv2.VideoCapture(0)
 kamera.set(cv2.CAP_PROP_FRAME_WIDTH, 1920)
 kamera.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080)
 kamera.set(cv2.CAP_PROP_AUTO_EXPOSURE, 0.25)
-kamera.set(cv2.CAP_PROP_EXPOSURE, -2)
+kamera.set(cv2.CAP_PROP_EXPOSURE, -4)
 
 # Global variables for calibration
 calibration_done = False
 px_measurements = []
 cm_per_pixel = 0
-ball_radius_px = 0
+ball_radius_px = 0 # Optimal ball radius is 16.3 px
+robot_speed = 22
+auto = True
+
+open_SSH_connection()
 
 def calibrate_measurement(event, x, y, flags, param):
     global px_measurements, calibration_done, cm_per_pixel, ball_radius_px
@@ -232,6 +239,8 @@ while True:
     filtered_red_contours = [cnt for cnt in red_contours if cv2.contourArea(cnt) > min_wall_area]
 
     boundary_box = None
+    box_points = None
+    inward_box = None
 
     # Boundary box calculation
     if filtered_red_contours:
@@ -240,9 +249,13 @@ while True:
         box_points = cv2.boxPoints(rect)
         box_points = np.array(box_points, dtype=np.int32)
         center = np.mean(box_points, axis=0)
-        shrink_factor = 0.90
+        shrink_factor = 0.9
         inward_box = (box_points - center) * shrink_factor + center
         inward_box = np.int32(inward_box)
+        # inward_box[0][1] -= 20
+        # inward_box[3][1] -= 20
+        # inward_box[1][1] += 20
+        # inward_box[2][1] += 20
         boundary_box = cv2.boundingRect(inward_box)
         cv2.drawContours(frame, [inward_box], 0, (0, 255, 255), 2)
         x, y, w, h = boundary_box
@@ -370,18 +383,11 @@ while True:
     if circles is not None:
         circles = np.uint16(np.around(circles))
         for i in circles[0, :]:
-            cx, cy, r = float(i[0]), float(i[1]), float(i[2])
+            cx, cy, r = int(i[0]), int(i[1]), int(i[2])
 
             # Exclude circles in robot areas
-            # in_robot = False
             
-            # for contour in robot_contours:
-            #     x, y, w, h = cv2.boundingRect(contour)
-            #     if (x <= cx - r and cx + r <= x + w and 
-            #         y <= cy - r and cy + r <= y + h):
-            #         in_robot = True
-            #         break
-            if is_in_robot(green_contours, pink_contours, cx, cy):
+            if is_in_robot(green_contours, pink_contours, cx, cy, boundary_box):
                 continue
 
             # Exclude circles outside boundary
@@ -392,9 +398,11 @@ while True:
 
             filtered_circles.append(i)
 
+        ball_radius_px = np.mean([i[2] for i in filtered_circles]) if filtered_circles else ball_radius_px
+
         # Draw detected circles
         for i in filtered_circles:
-            cx, cy, r = i[0], i[1], i[2]
+            cx, cy, r = int(i[0]), int(i[1]), int(i[2])
             if r < (ball_radius_px * 1.2):
                 cv2.circle(frame, (cx, cy), r, (0, 255, 0), 2)
                 cv2.putText(frame, f"Ball ({cx}, {cy})", (cx - r, cy - r - 10),
@@ -408,20 +416,18 @@ while True:
     # cv2.imshow("Red Color Filter", red_mask)
     # cv2.imshow("Green Color Filter", mask_green)
     # cv2.imshow("Red inside Filter", red_mask_inside)
-    cv2.imshow("Robot and Ball Detection", frame)
+    # cv2.imshow("Robot and Ball Detection", frame)
 
-    # Distance calculation
-    if cv2.waitKey(1) & 0xFF == ord('f') and green_contours:
-
+    if (cv2.waitKey(1) & 0xFF == ord('f') or auto) and green_contours:
         if not filtered_circles:
             # print("No circles detected")
             continue
 
-        x1, y1= 0, 0
+        x1, y1 = 0, 0
 
         shortest_distance = 0
 
-        top, right, left, bottom = find_robot(green_contours, pink_contours)
+        top, bottom = find_robot(green_contours, pink_contours, boundary_box)
 
         circleFound = False
 
@@ -433,7 +439,7 @@ while True:
                 if shortest_distance == 0 or dist < shortest_distance:
                     shortest_distance = dist
                     x1, y1 = x, y
-                    print(f"Circle found at ({x1}, {y1}) with distance {dist}")
+                    # print(f"Circle found at ({x1}, {y1}) with distance {dist}")
                     
         x1, y1 = float(x1), float(y1)
         x2, y2 = float(bottom[0]), float(bottom[1])
@@ -442,29 +448,35 @@ while True:
         distanceBtwCircleAndRobot = calculate_distance((x1, y1), (x2, y2))
 
         # Calculate seconds based on distance
-        ROBOTSPEEDAT30PERCENT = 25
-        print(f"{(distanceBtwCircleAndRobot * cm_per_pixel)} / {ROBOTSPEEDAT30PERCENT}")
-        sec = float((distanceBtwCircleAndRobot * cm_per_pixel) / ROBOTSPEEDAT30PERCENT)
+        # print(f"{(distanceBtwCircleAndRobot * cm_per_pixel)} / {ROBOTSPEEDAT30PERCENT}")
+        sec = float((distanceBtwCircleAndRobot * cm_per_pixel) / robot_speed)
+        # sec = sec*0.99
 
         angleToMove = calculate_rotation_angle((top[0],top[1]), (bottom[0],bottom[1]), (x1, y1))
-        angleToMove = angleToMove*.99
-        angleToMove = int(angleToMove)
+        if angleToMove < 0:
+            angleToMove = int(angleToMove + 1)
+        else:
+            angleToMove = int(angleToMove - 1)
         
         print(f"Angle and Distance between robot back ({x2}, {y2}), robot front ({top[0]}, {top[1]}) and ball ({x1}, {y1}): {angleToMove:.2f}, {distanceBtwCircleAndRobot * cm_per_pixel:.2f} cm")
 
         send_coordinates_to_ev3(angleToMove, sec)
- 
-    # if cv2.waitKey(1) & 0xFF == ord('x'):
-    #     print("Robot coords:", robot_front, robot_back)
-        
-    #     dist = calculate_distance(robot_front[0], robot_back[0])
-    #     angle = calculate_angle(robot_front[0], robot_back[0])
 
-    #     print(f"Distance and Angle between robot front and back: {dist:.2f} px and {angle} degrees at points {robot_front[0]} and {robot_back[0]}")
+    if cv2.waitKey(1) & 0xFF == ord('j'):
+        kamera.set(cv2.CAP_PROP_EXPOSURE, -4)
+    if cv2.waitKey(1) & 0xFF == ord('k'):
+        kamera.set(cv2.CAP_PROP_EXPOSURE, -5)
+    if cv2.waitKey(1) & 0xFF == ord('l'):
+        kamera.set(cv2.CAP_PROP_EXPOSURE, -6)
+    if cv2.waitKey(1) & 0xFF == ord('m'):
+        print(f"Points of the wall: {inward_box}")
 
     # Exit on 'q'
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
+
+if ssh_client is not None:
+    close_SSH_connection()
 
 kamera.release()
 cv2.destroyAllWindows()
