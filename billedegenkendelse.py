@@ -168,7 +168,7 @@ kamera = cv2.VideoCapture(0)
 kamera.set(cv2.CAP_PROP_FRAME_WIDTH, 1920)
 kamera.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080)
 kamera.set(cv2.CAP_PROP_AUTO_EXPOSURE, 0.25)
-kamera.set(cv2.CAP_PROP_EXPOSURE, -7)
+kamera.set(cv2.CAP_PROP_EXPOSURE, -6)
 
 # Global variables for calibration
 calibration_done = False
@@ -223,10 +223,14 @@ print(f"Detection parameters - Radius range: {min_radius}-{max_radius} pixels")
 print(f"cm_per_pixel: {cm_per_pixel:.4f}")
 
 # Optimized HSV color ranges
-lower_white = (0, 0, 200)
-upper_white = (180, 30, 255)
-lower_orange = (10, 100, 100)
-upper_orange = (25, 255, 255)
+# Wider Orange (for light + dark shades)
+lower_orange = np.array([1, 60, 60])
+upper_orange = np.array([30, 255, 255])
+
+# White (unchanged, works well for white ball)
+lower_white = np.array([0, 0, 180])
+upper_white = np.array([180, 80, 255])
+
 lower_red1 = np.array([0, 100, 100])
 upper_red1 = np.array([10, 255, 255])
 lower_red2 = np.array([160, 100, 100])
@@ -405,9 +409,14 @@ while True:
             cv2.putText(frame, f"Front ({x+w/2},{y+h/2})", (x, y - 10),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 255), 2)
 
+    mask_orange = cv2.inRange(hsv, lower_orange, upper_orange)
+    mask_white = cv2.inRange(hsv, lower_white, upper_white)
+
+        # Combine both masks
+    com_mask = cv2.bitwise_or(mask_orange, mask_white)
     # Circle detection using V channel
     circles = cv2.HoughCircles(
-        v_channel, 
+        com_mask, 
         cv2.HOUGH_GRADIENT, 
         dp=1, 
         minDist=int(ball_radius_px * 2),
@@ -462,7 +471,7 @@ while True:
     # Display results
     # cv2.imshow("Red Color Filter", red_mask)
     # cv2.imshow("Green Color Filter", mask_green)
-    cv2.imshow("Red inside Filter", v_channel)
+    cv2.imshow("Red inside Filter", com_mask)
     cv2.imshow("Robot and Ball Detection", frame)
 
     if ((cv2.waitKey(1) & 0xFF == ord('f')) or auto) and green_contours:
@@ -537,14 +546,14 @@ while True:
                 continue
 
         # print(f"out of loop")
-        if angleToMove > 45:
-            send_command('right')
-            time.sleep(0.7)
-            continue
-        elif angleToMove < -45:
-            send_command('left')
-            time.sleep(0.7)
-            continue
+        # if angleToMove > 45:
+        #     send_command('right')
+        #     time.sleep(0.7)
+        #     continue
+        # elif angleToMove < -45:
+        #     send_command('left')
+        #     time.sleep(0.7)
+        #     continue
         elif angleToMove > 3:
             send_command('slowright')
             time.sleep(0.2)
