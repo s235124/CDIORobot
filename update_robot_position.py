@@ -33,11 +33,10 @@ def handle_command(cmd):
         motor.on(-10, -10)
     elif cmd == "slowforward":
         motor.on(10, 10)
-        port.on_for_seconds(speed=-10, seconds=1)
     elif cmd == "left":
-        motor.on(-20, 20)
+        motor.on_for_seconds(-20, 20, seconds=0.5)
     elif cmd == "right":
-        motor.on(20, -20)
+        motor.on_for_seconds(20, -20, seconds=0.5)
     elif cmd == "stop":
         motor.off()
         port.off()

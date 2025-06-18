@@ -5,7 +5,7 @@ import paramiko
 import socket
 import time
 
-IPADDRESS = '169.254.202.16' # REMEMBER TO UPDATE THIS
+IPADDRESS = '169.254.67.165' # REMEMBER TO UPDATE THIS
 PORT = 9999
 
 sock = None
@@ -168,7 +168,7 @@ kamera = cv2.VideoCapture(0)
 kamera.set(cv2.CAP_PROP_FRAME_WIDTH, 1920)
 kamera.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080)
 kamera.set(cv2.CAP_PROP_AUTO_EXPOSURE, 0.25)
-kamera.set(cv2.CAP_PROP_EXPOSURE, -6)
+kamera.set(cv2.CAP_PROP_EXPOSURE, -7)
 
 # Global variables for calibration
 calibration_done = False
@@ -223,6 +223,10 @@ print(f"Detection parameters - Radius range: {min_radius}-{max_radius} pixels")
 print(f"cm_per_pixel: {cm_per_pixel:.4f}")
 
 # Optimized HSV color ranges
+lower_white = (0, 0, 200)
+upper_white = (180, 30, 255)
+lower_orange = (10, 100, 100)
+upper_orange = (25, 255, 255)
 lower_red1 = np.array([0, 100, 100])
 upper_red1 = np.array([10, 255, 255])
 lower_red2 = np.array([160, 100, 100])
@@ -237,6 +241,9 @@ lower_yellow = np.array([25, 100, 100])
 upper_yellow = np.array([35, 255, 255])
 
 e = True
+send_command('kick')
+time.sleep(0.5)
+
 # Main processing loop
 while True:
     ret, frame = kamera.read()
@@ -455,7 +462,7 @@ while True:
     # Display results
     # cv2.imshow("Red Color Filter", red_mask)
     # cv2.imshow("Green Color Filter", mask_green)
-    # cv2.imshow("Red inside Filter", red_mask_inside)
+    cv2.imshow("Red inside Filter", v_channel)
     cv2.imshow("Robot and Ball Detection", frame)
 
     if ((cv2.waitKey(1) & 0xFF == ord('f')) or auto) and green_contours:
@@ -498,20 +505,28 @@ while True:
         x1, y1 = float(x1), float(y1)
         x2, y2 = float(bottom[0]), float(bottom[1])
 
-        distanceBtwCircleAndRobot = calculate_distance((x2, y2), (x1, y1))
+        # distanceBtwCircleAndRobot = calculate_distance((x2, y2), (x1, y1))
 
         angleToMove = calculate_rotation_angle((top[0],top[1]), (bottom[0],bottom[1]), (x1, y1))
 
-        print(f"Distances: {distanceBtwCircleAndRobot}, {ball_radius_px * 4}")
+        if calculate_distance((top[0], top[1]), (x1, y1)) < (ball_radius_px * 2):
+            send_command('catchball')
+            time.sleep(4)
+            continue
         if calculate_distance((top[0], top[1]), (x1, y1)) < (ball_radius_px * 4):
+            send_command('stop')
+            time.sleep(0.2)
+            continue
+
+        # print(f"Distances: {distanceBtwCircleAndRobot}, {ball_radius_px * 4}")
+        if calculate_distance((top[0], top[1]), (x1, y1)) < (ball_radius_px * 2):
             if -3 < angleToMove < 3:
                 # print("Robot is close enough to the ball, catching it")
                 send_command('catchball')
-                time.sleep(0.2)
+                time.sleep(4)
                 continue 
 
-            print("Have to turn")
-
+            print(f"inside loop")
             if angleToMove > 3:
                 send_command('slowright')
                 time.sleep(0.2)
@@ -521,7 +536,16 @@ while True:
                 time.sleep(0.2)
                 continue
 
-        if angleToMove > 3:
+        # print(f"out of loop")
+        if angleToMove > 45:
+            send_command('right')
+            time.sleep(0.7)
+            continue
+        elif angleToMove < -45:
+            send_command('left')
+            time.sleep(0.7)
+            continue
+        elif angleToMove > 3:
             send_command('slowright')
             time.sleep(0.2)
             continue
@@ -533,10 +557,13 @@ while True:
         # time.sleep(0.5)
 
 
-        if calculate_distance((top[0], top[1]), (x1, y1)) < (ball_radius_px * 4):
-            send_command('stop')
+        # if calculate_distance((top[0], top[1]), (x1, y1)) < (ball_radius_px * 4):
+        #     send_command('stop')
+        #     time.sleep(0.2)
+        if calculate_distance((top[0], top[1]), (x1, y1)) < (ball_radius_px * 6):
+            send_command('slowforward')
             time.sleep(0.2)
-        else:
+        elif calculate_distance((top[0], top[1]), (x1, y1)) > (ball_radius_px * 8):
             send_command('forward')
             # time.sleep(0.2)
 
