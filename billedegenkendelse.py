@@ -3,7 +3,7 @@ import numpy as np
 import math
 import paramiko
 
-IPADDRESS = '169.254.80.77' # REMEMBER TO UPDATE THIS
+IPADDRESS = '169.254.35.226' # REMEMBER TO UPDATE THIS
 ssh_client = None
 
 def open_SSH_connection():
@@ -148,7 +148,7 @@ kamera = cv2.VideoCapture(0)
 kamera.set(cv2.CAP_PROP_FRAME_WIDTH, 1920)
 kamera.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080)
 kamera.set(cv2.CAP_PROP_AUTO_EXPOSURE, 0.25)
-kamera.set(cv2.CAP_PROP_EXPOSURE, -4)
+kamera.set(cv2.CAP_PROP_EXPOSURE, -7)
 
 # Global variables for calibration
 calibration_done = False
@@ -156,9 +156,11 @@ px_measurements = []
 cm_per_pixel = 0
 ball_radius_px = 0 # Optimal ball radius is 16.3 px
 robot_speed = 22
+# ball_counter = 0
+
 auto = True
 
-open_SSH_connection()
+# open_SSH_connection()
 
 def calibrate_measurement(event, x, y, flags, param):
     global px_measurements, calibration_done, cm_per_pixel, ball_radius_px
@@ -214,6 +216,7 @@ upper_pink = np.array([170, 255, 255])
 lower_yellow = np.array([25, 100, 100])
 upper_yellow = np.array([35, 255, 255])
 
+e = False
 # Main processing loop
 while True:
     ret, frame = kamera.read()
@@ -306,7 +309,9 @@ while True:
         cv2.drawContours(frame, [closest_cross], -1, (0, 255, 0), 3)
         cv2.putText(frame, "CROSS", (cross_center[0] - 40, cross_center[1] - 20),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
-        # print(f"✅ KRYDS GENKENDT i midten: ({cross_center[0]}, {cross_center[1]}), hjørner={len(approx)}")
+        if e:
+            print(f"KRYDS GENKENDT i midten: {closest_cross}")
+        e = False
 
     # Robot detection using HSV
     mask_green = cv2.inRange(hsv, lower_green, upper_green)
@@ -396,6 +401,15 @@ while True:
                 if not (bx <= cx <= bx + bw and by <= cy <= by + bh):
                     continue
 
+                square_side = 100  # You can adjust this
+                mid_x = bx + bw / 2
+                mid_y = by + bh / 2
+                half_side = square_side / 2
+                if (mid_x - half_side <= cx <= mid_x + half_side and
+                    mid_y - half_side <= cy <= mid_y + half_side):
+                    continue  # Skip this circle
+                
+
             filtered_circles.append(i)
 
         ball_radius_px = np.mean([i[2] for i in filtered_circles]) if filtered_circles else ball_radius_px
@@ -416,9 +430,19 @@ while True:
     # cv2.imshow("Red Color Filter", red_mask)
     # cv2.imshow("Green Color Filter", mask_green)
     # cv2.imshow("Red inside Filter", red_mask_inside)
-    # cv2.imshow("Robot and Ball Detection", frame)
+    cv2.imshow("Robot and Ball Detection", frame)
 
-    if (cv2.waitKey(1) & 0xFF == ord('f') or auto) and green_contours:
+    if ((cv2.waitKey(1) & 0xFF == ord('f')) or auto) and green_contours:
+
+        # if (ball_counter >= 3):
+        #     print("Ball counter reached 3, going to goal for drop-off")
+        #     goal = None
+        #     leftx =  inward_box[0][0]
+        #     rightx = inward_box[1][0]
+
+        #     if (bottom[0] - leftx) < (rightx - bottom[0]):
+        #         goal = (leftx, inward_box[0][1] + inward_box[0][1] / 2)
+
         if not filtered_circles:
             # print("No circles detected")
             continue
@@ -426,8 +450,12 @@ while True:
         x1, y1 = 0, 0
 
         shortest_distance = 0
-
-        top, bottom = find_robot(green_contours, pink_contours, boundary_box)
+        
+        try:
+            top, bottom = find_robot(green_contours, pink_contours, boundary_box)
+        except Exception as e:
+            # print("Error finding robot:", e)
+            continue
 
         circleFound = False
 
@@ -461,6 +489,7 @@ while True:
         print(f"Angle and Distance between robot back ({x2}, {y2}), robot front ({top[0]}, {top[1]}) and ball ({x1}, {y1}): {angleToMove:.2f}, {distanceBtwCircleAndRobot * cm_per_pixel:.2f} cm")
 
         send_coordinates_to_ev3(angleToMove, sec)
+        # ball_counter += 1
 
     if cv2.waitKey(1) & 0xFF == ord('j'):
         kamera.set(cv2.CAP_PROP_EXPOSURE, -4)
