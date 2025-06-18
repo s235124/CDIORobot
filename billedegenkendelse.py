@@ -2,41 +2,61 @@ import cv2
 import numpy as np
 import math
 import paramiko
+import socket
+import time
 
-IPADDRESS = '169.254.35.226' # REMEMBER TO UPDATE THIS
-ssh_client = None
+IPADDRESS = '169.254.202.16' # REMEMBER TO UPDATE THIS
+PORT = 9999
+
+sock = None
 
 def open_SSH_connection():
     # Connect to the EV3 via SSH
-    print("Connecting to EV3 at", IPADDRESS)
-    global ssh_client
-    ssh_client = paramiko.SSHClient()
-    ssh_client.load_system_host_keys()
-    ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-    ssh_client.connect(IPADDRESS, username='robot', password='maker')
+    # print("Connecting to EV3 at", IPADDRESS)
+    # global ssh_client
+    # ssh_client = paramiko.SSHClient()
+    # ssh_client.load_system_host_keys()
+    # ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    # ssh_client.connect(IPADDRESS, username='robot', password='maker')
 
-    command = f'python3 /home/robot/Gruppe3CDIOPython/first.py'
-    stdin, stdout, stderr = ssh_client.exec_command(command)
+    # command = f'python3 /home/robot/Gruppe3CDIOPython/first.py'
+    # stdin, stdout, stderr = ssh_client.exec_command(command)
     
     # Print output or errors (for debugging)
     # print("STDOUT:", stdout.read().decode())
     # print("STDERR:", stderr.read().decode())
+    global sock
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.connect((IPADDRESS, PORT))
+    print("Connected to EV3!")
 
-
-def send_coordinates_to_ev3(angle, seconds):
-    # Command to update robot's movement based on the target coordinates
-    command = f'python3 /home/robot/Gruppe3CDIOPython/update_robot_position.py {angle} {seconds}'
-    stdin, stdout, stderr = ssh_client.exec_command(command)
+def send_command(cmd):
+    print(f"Sending: {cmd}")
+    sock.sendall(cmd.encode())
     
-    # Print output or errors (for debugging)
-    print("Sending angle and seconds:", angle, seconds)
-    print("STDOUT:", stdout.read().decode())
-    print("STDERR:", stderr.read().decode())
+# def send_coordinates_to_ev3(angle, seconds):
+#     # Command to update robot's movement based on the target coordinates
+#     command = f'python3 /home/robot/Gruppe3CDIOPython/update_robot_position.py {angle} {seconds}'
+#     stdin, stdout, stderr = ssh_client.exec_command(command)
+    
+#     # Print output or errors (for debugging)
+#     print("Sending angle and seconds:", angle, seconds)
+#     print("STDOUT:", stdout.read().decode())
+#     print("STDERR:", stderr.read().decode())
 
-def close_SSH_connection():
-    # Close the SSH connection
-    print("Closing SSH connection")
-    ssh_client.close()
+# def reverse_ev3():
+#     # Command to update robot's movement based on the target coordinates
+#     command = f'python3 /home/robot/Gruppe3CDIOPython/reverse.py'
+#     stdin, stdout, stderr = ssh_client.exec_command(command)
+    
+#     # Print output or errors (for debugging)
+#     print("STDOUT:", stdout.read().decode())
+#     print("STDERR:", stderr.read().decode())
+
+# def close_SSH_connection():
+#     # Close the SSH connection
+#     print("Closing SSH connection")
+#     ssh_client.close()
 
 def calculate_rotation_angle(front, back, ball, return_degrees=True):
     # Calculate vectors
@@ -148,7 +168,7 @@ kamera = cv2.VideoCapture(0)
 kamera.set(cv2.CAP_PROP_FRAME_WIDTH, 1920)
 kamera.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080)
 kamera.set(cv2.CAP_PROP_AUTO_EXPOSURE, 0.25)
-kamera.set(cv2.CAP_PROP_EXPOSURE, -7)
+kamera.set(cv2.CAP_PROP_EXPOSURE, -6)
 
 # Global variables for calibration
 calibration_done = False
@@ -160,7 +180,7 @@ robot_speed = 22
 
 auto = True
 
-# open_SSH_connection()
+open_SSH_connection()
 
 def calibrate_measurement(event, x, y, flags, param):
     global px_measurements, calibration_done, cm_per_pixel, ball_radius_px
@@ -216,7 +236,7 @@ upper_pink = np.array([170, 255, 255])
 lower_yellow = np.array([25, 100, 100])
 upper_yellow = np.array([35, 255, 255])
 
-e = False
+e = True
 # Main processing loop
 while True:
     ret, frame = kamera.read()
@@ -275,43 +295,43 @@ while True:
     frame_h, frame_w = frame.shape[:2]
     frame_center = (frame_w // 2, frame_h // 2)
 
-    closest_cross = None
-    closest_distance = float('inf')
-    cross_center = (0, 0)
+    # closest_cross = None
+    # closest_distance = float('inf')
+    # cross_center = (0, 0)
 
-    for cnt in red_contours:
-        if cnt is None or cnt.size == 0 or cnt.shape[0] < 3:
-            continue
+    # for cnt in red_contours:
+    #     if cnt is None or cnt.size == 0 or cnt.shape[0] < 3:
+    #         continue
 
-        if cv2.contourArea(cnt) < 100:
-            continue
+    #     if cv2.contourArea(cnt) < 100:
+    #         continue
 
-        approx = cv2.approxPolyDP(cnt, 0.02 * cv2.arcLength(cnt, True), True)
+    #     approx = cv2.approxPolyDP(cnt, 0.02 * cv2.arcLength(cnt, True), True)
 
-        # You can modify this condition depending on your shape
-        if 10 <= len(approx) <= 14:
-            M = cv2.moments(cnt)
-            if M["m00"] == 0:
-                continue
-            cx = int(M["m10"] / M["m00"])
-            cy = int(M["m01"] / M["m00"])
+    #     # You can modify this condition depending on your shape
+    #     if 10 <= len(approx) <= 14:
+    #         M = cv2.moments(cnt)
+    #         if M["m00"] == 0:
+    #             continue
+    #         cx = int(M["m10"] / M["m00"])
+    #         cy = int(M["m01"] / M["m00"])
 
-            # Compute distance to frame center
-            dist_to_center = np.sqrt((cx - frame_center[0])**2 + (cy - frame_center[1])**2)
+    #         # Compute distance to frame center
+    #         dist_to_center = np.sqrt((cx - frame_center[0])**2 + (cy - frame_center[1])**2)
 
-            if dist_to_center < closest_distance:
-                closest_distance = dist_to_center
-                closest_cross = cnt
-                cross_center = (cx, cy)
+    #         if dist_to_center < closest_distance:
+    #             closest_distance = dist_to_center
+    #             closest_cross = cnt
+    #             cross_center = (cx, cy)
 
-    # Draw only the most centered valid cross
-    if closest_cross is not None:
-        cv2.drawContours(frame, [closest_cross], -1, (0, 255, 0), 3)
-        cv2.putText(frame, "CROSS", (cross_center[0] - 40, cross_center[1] - 20),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
-        if e:
-            print(f"KRYDS GENKENDT i midten: {closest_cross}")
-        e = False
+    # # Draw only the most centered valid cross
+    # if closest_cross is not None:
+    #     cv2.drawContours(frame, [closest_cross], -1, (0, 255, 0), 3)
+    #     cv2.putText(frame, "CROSS", (cross_center[0] - 40, cross_center[1] - 20),
+    #                 cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+    #     if e:
+    #         print(f"KRYDS GENKENDT i midten: {closest_cross}")
+    #     e = False
 
     # Robot detection using HSV
     mask_green = cv2.inRange(hsv, lower_green, upper_green)
@@ -353,7 +373,13 @@ while True:
             cv2.putText(frame, f"Back ({x+w/2},{y+h/2})", (x, y - 10),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
 
-    # Process yellow robot part
+    # reverse_sent = False
+    # if len(pink_contours) <= 0 and not reverse_sent:
+    #     send_command('reverse')
+    #     reverse_sent = True
+    # elif len(pink_contours) > 0:
+    #     reverse_sent = False
+
     for contour in pink_contours:
         area = cv2.contourArea(contour)
 
@@ -417,14 +443,14 @@ while True:
         # Draw detected circles
         for i in filtered_circles:
             cx, cy, r = int(i[0]), int(i[1]), int(i[2])
-            if r < (ball_radius_px * 1.2):
+            if r <= ball_radius_px:
                 cv2.circle(frame, (cx, cy), r, (0, 255, 0), 2)
                 cv2.putText(frame, f"Ball ({cx}, {cy})", (cx - r, cy - r - 10),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
-            else:
-                cv2.circle(frame, (cx, cy), r, (255, 0, 0), 2)
-                cv2.putText(frame, "Egg", (cx - r, cy - r - 10),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 0), 2)
+            # else:
+            #     cv2.circle(frame, (cx, cy), r, (255, 0, 0), 2)
+            #     cv2.putText(frame, "Egg", (cx - r, cy - r - 10),
+            #                 cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 0), 2)
 
     # Display results
     # cv2.imshow("Red Color Filter", red_mask)
@@ -455,9 +481,9 @@ while True:
             top, bottom = find_robot(green_contours, pink_contours, boundary_box)
         except Exception as e:
             # print("Error finding robot:", e)
+            send_command('reverse')
+            time.sleep(0.2)
             continue
-
-        circleFound = False
 
         for circle in filtered_circles:
             if circle[2] < (ball_radius_px * 1.2):
@@ -472,40 +498,67 @@ while True:
         x1, y1 = float(x1), float(y1)
         x2, y2 = float(bottom[0]), float(bottom[1])
 
-        distanceOfRobot =  calculate_distance((top[0], top[1]), (bottom[0], bottom[1]))
-        distanceBtwCircleAndRobot = calculate_distance((x1, y1), (x2, y2))
-
-        # Calculate seconds based on distance
-        # print(f"{(distanceBtwCircleAndRobot * cm_per_pixel)} / {ROBOTSPEEDAT30PERCENT}")
-        sec = float((distanceBtwCircleAndRobot * cm_per_pixel) / robot_speed)
-        # sec = sec*0.99
+        distanceBtwCircleAndRobot = calculate_distance((x2, y2), (x1, y1))
 
         angleToMove = calculate_rotation_angle((top[0],top[1]), (bottom[0],bottom[1]), (x1, y1))
-        if angleToMove < 0:
-            angleToMove = int(angleToMove + 1)
-        else:
-            angleToMove = int(angleToMove - 1)
+
+        print(f"Distances: {distanceBtwCircleAndRobot}, {ball_radius_px * 4}")
+        if calculate_distance((top[0], top[1]), (x1, y1)) < (ball_radius_px * 4):
+            if -3 < angleToMove < 3:
+                # print("Robot is close enough to the ball, catching it")
+                send_command('catchball')
+                time.sleep(0.2)
+                continue 
+
+            print("Have to turn")
+
+            if angleToMove > 3:
+                send_command('slowright')
+                time.sleep(0.2)
+                continue
+            elif angleToMove < -3:
+                send_command('slowleft')
+                time.sleep(0.2)
+                continue
+
+        if angleToMove > 3:
+            send_command('slowright')
+            time.sleep(0.2)
+            continue
+        elif angleToMove < -3:
+            send_command('slowleft')
+            time.sleep(0.2)
+            continue
         
-        print(f"Angle and Distance between robot back ({x2}, {y2}), robot front ({top[0]}, {top[1]}) and ball ({x1}, {y1}): {angleToMove:.2f}, {distanceBtwCircleAndRobot * cm_per_pixel:.2f} cm")
+        # time.sleep(0.5)
 
-        send_coordinates_to_ev3(angleToMove, sec)
+
+        if calculate_distance((top[0], top[1]), (x1, y1)) < (ball_radius_px * 4):
+            send_command('stop')
+            time.sleep(0.2)
+        else:
+            send_command('forward')
+            # time.sleep(0.2)
+
+        # print(f"Angle and Distance between robot back ({x2}, {y2}), robot front ({top[0]}, {top[1]}) and ball ({x1}, {y1}): {angleToMove:.2f}, {distanceBtwCircleAndRobot * cm_per_pixel:.2f} cm")
+
+        # send_coordinates_to_ev3(angleToMove, sec)
         # ball_counter += 1
-
-    if cv2.waitKey(1) & 0xFF == ord('j'):
-        kamera.set(cv2.CAP_PROP_EXPOSURE, -4)
-    if cv2.waitKey(1) & 0xFF == ord('k'):
-        kamera.set(cv2.CAP_PROP_EXPOSURE, -5)
-    if cv2.waitKey(1) & 0xFF == ord('l'):
-        kamera.set(cv2.CAP_PROP_EXPOSURE, -6)
-    if cv2.waitKey(1) & 0xFF == ord('m'):
-        print(f"Points of the wall: {inward_box}")
 
     # Exit on 'q'
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
 
-if ssh_client is not None:
-    close_SSH_connection()
+    if cv2.waitKey(1) & 0xFF == ord('m'):
+        auto = False
+    if cv2.waitKey(1) & 0xFF == ord('n'):
+        auto = True
+
+# if ssh_client is not None:
+#     close_SSH_connection()
+
+send_command('stop')
+sock.close()
 
 kamera.release()
 cv2.destroyAllWindows()
