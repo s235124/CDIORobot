@@ -5,7 +5,7 @@ import paramiko
 import socket
 import time
 
-IPADDRESS = '169.254.67.165' # REMEMBER TO UPDATE THIS
+IPADDRESS = '169.254.142.235' # REMEMBER TO UPDATE THIS
 PORT = 9999
 
 sock = None
@@ -169,6 +169,8 @@ kamera.set(cv2.CAP_PROP_FRAME_WIDTH, 1920)
 kamera.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080)
 kamera.set(cv2.CAP_PROP_AUTO_EXPOSURE, 0.25)
 kamera.set(cv2.CAP_PROP_EXPOSURE, -6)
+# kamera.set(cv2.CAP_PROP_BRIGHTNESS, 0.7)      # Range: 0.0 - 1.0
+# kamera.set(cv2.CAP_PROP_WHITE_BALANCE_BLUE_U, 4000)  # Try adjusting WB if supported
 
 # Global variables for calibration
 calibration_done = False
@@ -245,8 +247,8 @@ lower_yellow = np.array([25, 100, 100])
 upper_yellow = np.array([35, 255, 255])
 
 e = True
-send_command('kick')
-time.sleep(0.5)
+# send_command('kick')
+# time.sleep(0.5)
 
 # Main processing loop
 while True:
@@ -296,15 +298,15 @@ while True:
         cv2.putText(frame, "Wall Boundary", (x, y - 10),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
 
-    mask_inside_wall = np.zeros_like(red_mask)
-    cv2.fillPoly(mask_inside_wall, [inward_box], 255)
-    red_mask_inside = cv2.bitwise_and(red_mask, mask_inside_wall)
+    # mask_inside_wall = np.zeros_like(red_mask)
+    # cv2.fillPoly(mask_inside_wall, [inward_box], 255)
+    # red_mask_inside = cv2.bitwise_and(red_mask, mask_inside_wall)
 
-    # Now use the inner mask to find potential cross contours
-    red_contours, _ = cv2.findContours(red_mask_inside, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    # # Now use the inner mask to find potential cross contours
+    # red_contours, _ = cv2.findContours(red_mask_inside, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
-    frame_h, frame_w = frame.shape[:2]
-    frame_center = (frame_w // 2, frame_h // 2)
+    # frame_h, frame_w = frame.shape[:2]
+    # frame_center = (frame_w // 2, frame_h // 2)
 
     # closest_cross = None
     # closest_distance = float('inf')
@@ -409,19 +411,14 @@ while True:
             cv2.putText(frame, f"Front ({x+w/2},{y+h/2})", (x, y - 10),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 255), 2)
 
-    mask_orange = cv2.inRange(hsv, lower_orange, upper_orange)
-    mask_white = cv2.inRange(hsv, lower_white, upper_white)
-
-        # Combine both masks
-    com_mask = cv2.bitwise_or(mask_orange, mask_white)
     # Circle detection using V channel
     circles = cv2.HoughCircles(
-        com_mask, 
+        v_channel, 
         cv2.HOUGH_GRADIENT, 
         dp=1, 
         minDist=int(ball_radius_px * 2),
         param1=50, 
-        param2=30, 
+        param2=20, 
         minRadius=min_radius, 
         maxRadius=max_radius
     )
@@ -471,7 +468,7 @@ while True:
     # Display results
     # cv2.imshow("Red Color Filter", red_mask)
     # cv2.imshow("Green Color Filter", mask_green)
-    cv2.imshow("Red inside Filter", com_mask)
+    cv2.imshow("Red inside Filter", v_channel)
     cv2.imshow("Robot and Ball Detection", frame)
 
     if ((cv2.waitKey(1) & 0xFF == ord('f')) or auto) and green_contours:
@@ -518,17 +515,12 @@ while True:
 
         angleToMove = calculate_rotation_angle((top[0],top[1]), (bottom[0],bottom[1]), (x1, y1))
 
-        if calculate_distance((top[0], top[1]), (x1, y1)) < (ball_radius_px * 2):
-            send_command('catchball')
-            time.sleep(4)
-            continue
-        if calculate_distance((top[0], top[1]), (x1, y1)) < (ball_radius_px * 4):
-            send_command('stop')
-            time.sleep(0.2)
-            continue
-
         # print(f"Distances: {distanceBtwCircleAndRobot}, {ball_radius_px * 4}")
         if calculate_distance((top[0], top[1]), (x1, y1)) < (ball_radius_px * 2):
+
+            send_command('stop')
+            time.sleep(0.2)
+        
             if -3 < angleToMove < 3:
                 # print("Robot is close enough to the ball, catching it")
                 send_command('catchball')
@@ -545,16 +537,16 @@ while True:
                 time.sleep(0.2)
                 continue
 
-        # print(f"out of loop")
-        # if angleToMove > 45:
-        #     send_command('right')
-        #     time.sleep(0.7)
-        #     continue
-        # elif angleToMove < -45:
-        #     send_command('left')
-        #     time.sleep(0.7)
-        #     continue
-        elif angleToMove > 3:
+        print(f"out of loop")
+        if angleToMove > 45:
+            send_command('right')
+            time.sleep(0.7)
+            continue
+        elif angleToMove < -45:
+            send_command('left')
+            time.sleep(0.7)
+            continue
+        if angleToMove > 3:
             send_command('slowright')
             time.sleep(0.2)
             continue
@@ -576,20 +568,19 @@ while True:
             send_command('forward')
             # time.sleep(0.2)
 
-        # print(f"Angle and Distance between robot back ({x2}, {y2}), robot front ({top[0]}, {top[1]}) and ball ({x1}, {y1}): {angleToMove:.2f}, {distanceBtwCircleAndRobot * cm_per_pixel:.2f} cm")
+        ball_counter += 1
 
-        # send_coordinates_to_ev3(angleToMove, sec)
-        # ball_counter += 1
+    if cv2.waitKey(1) & 0xFF == ord('j'):
+        kamera.set(cv2.CAP_PROP_EXPOSURE, -4)
+    if cv2.waitKey(1) & 0xFF == ord('k'):
+        kamera.set(cv2.CAP_PROP_EXPOSURE, -8)
+    if cv2.waitKey(1) & 0xFF == ord('l'):
+        kamera.set(cv2.CAP_PROP_EXPOSURE, -12)
 
     # Exit on 'q'
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
-
-    if cv2.waitKey(1) & 0xFF == ord('m'):
-        auto = False
-    if cv2.waitKey(1) & 0xFF == ord('n'):
-        auto = True
-
+        
 # if ssh_client is not None:
 #     close_SSH_connection()
 
