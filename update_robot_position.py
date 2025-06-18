@@ -1,5 +1,4 @@
 import socket
-from ev3dev2.sensor.lego import GyroSensor
 from ev3dev2.motor import *
 from ev3dev2.sound import Sound
 from time import sleep
@@ -47,6 +46,12 @@ def handle_command(cmd):
     #     port.on_for_seconds(speed=-10, seconds=1)
     # elif cmd == "onemeter":
     #     motor.on_for_seconds(left_speed=80, right_speed=80, seconds=4)
+    elif cmd == "dropoff":
+        port.on_for_seconds(speed=10, seconds=1)
+        shooter.on_for_seconds(speed=-30, seconds=0.5)
+        sleep(0.5)
+        shooter.on_for_seconds(speed=30, seconds=0.5)
+        port.on_for_seconds(speed=-10, seconds=1)
     elif cmd == "kick":
         shooter.on_for_seconds(speed=-30, seconds=0.5)
         sleep(0.5)

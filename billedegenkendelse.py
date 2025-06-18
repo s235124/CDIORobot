@@ -178,7 +178,6 @@ px_measurements = []
 cm_per_pixel = 0
 ball_radius_px = 0 # Optimal ball radius is 16.3 px
 robot_speed = 22
-# ball_counter = 0
 
 auto = True
 
@@ -247,8 +246,11 @@ lower_yellow = np.array([25, 100, 100])
 upper_yellow = np.array([35, 255, 255])
 
 e = True
-# send_command('kick')
-# time.sleep(0.5)
+send_command('kick')
+time.sleep(0.5)
+
+ball_counter = 0
+droppingBallsOff = False
 
 # Main processing loop
 while True:
@@ -471,16 +473,73 @@ while True:
     cv2.imshow("Red inside Filter", v_channel)
     cv2.imshow("Robot and Ball Detection", frame)
 
-    if ((cv2.waitKey(1) & 0xFF == ord('f')) or auto) and green_contours:
+    # if (droppingBallsOff):
+    #     try:
+    #         top, robot = find_robot(green_contours, pink_contours, boundary_box)
+    #     except Exception as e:
+    #         # print("Error finding robot:", e)
+    #         continue
 
-        # if (ball_counter >= 3):
-        #     print("Ball counter reached 3, going to goal for drop-off")
-        #     goal = None
-        #     leftx =  inward_box[0][0]
-        #     rightx = inward_box[1][0]
+    #     print("Ball counter reached 3, going to goal for drop-off")
+    #     goal = None
+    #     leftx =  inward_box[0][0]
+    #     rightx = inward_box[1][0]
+    #     robotx = robot[0]
+    #     roboty = robot[1]
 
-        #     if (bottom[0] - leftx) < (rightx - bottom[0]):
-        #         goal = (leftx, inward_box[0][1] + inward_box[0][1] / 2)
+    #     if (robotx - leftx) < (rightx - robotx):
+    #         goal = (leftx, inward_box[0][1] + inward_box[0][1] / 2)
+    #     elif (robotx - leftx) > (rightx - robotx):
+    #         goal = (rightx, inward_box[1][1] + inward_box[1][1] / 2)
+
+    #     if goal is not None:
+    #         # print(f"Going to goal: {goal}")
+    #         angle = calculate_rotation_angle((top[0], top[1]), (robot[0], robot[1]), (robot[0], goal[1]))
+    #         dist_to_middle = calculate_distance((robot[0], robot[1]), (robot[0], goal[1]))
+
+    #         if not (dist_to_middle - 20 < dist_to_middle < dist_to_middle + 20):
+    #             if -3 < angle < 3:
+                    
+    #                 send_command('stop')
+    #             else:
+    #                 send_command('forward')
+                    
+            
+    #             if angle > 45:
+    #                 send_command('right')
+    #                 time.sleep(0.7)
+    #                 continue
+    #             elif angle < -45:
+    #                 send_command('left')
+    #                 time.sleep(0.7)
+    #                 continue
+    #             elif angle > 3:
+    #                 send_command('slowright')
+    #                 time.sleep(0.2)
+    #                 continue
+    #             elif angle < -3:
+    #                 send_command('slowleft')
+    #                 time.sleep(0.2)
+    #                 continue
+    #         else:
+    #             send_command('stop')
+    #             time.sleep(0.2)
+
+    #         angleToGoal = calculate_rotation_angle((top[0], top[1]), (robot[0], robot[1]), (goal[0], goal[1]))
+    #         dist_to_goal = calculate_distance((robot[0], robot[1]), (goal[0], goal[1]))
+
+    #         if not (dist_to_goal - 20 < dist_to_goal < dist_to_goal + 20):
+    #             if -3 < angleToGoal < 3:
+    #                 send_command('stop')
+    #             else:
+    #                 send_command('forward')
+    #                 continue
+
+    #         droppingBallsOff = False
+    #         ball_counter = 0
+    #     continue
+
+    if auto and green_contours:
 
         if not filtered_circles:
             # print("No circles detected")
@@ -525,6 +584,9 @@ while True:
                 # print("Robot is close enough to the ball, catching it")
                 send_command('catchball')
                 time.sleep(4)
+                # ball_counter += 1
+                # if ball_counter >= 3:
+                #     droppingBallsOff = True
                 continue 
 
             print(f"inside loop")
@@ -546,7 +608,7 @@ while True:
             send_command('left')
             time.sleep(0.7)
             continue
-        if angleToMove > 3:
+        elif angleToMove > 3:
             send_command('slowright')
             time.sleep(0.2)
             continue
@@ -567,8 +629,6 @@ while True:
         elif calculate_distance((top[0], top[1]), (x1, y1)) > (ball_radius_px * 8):
             send_command('forward')
             # time.sleep(0.2)
-
-        ball_counter += 1
 
     if cv2.waitKey(1) & 0xFF == ord('j'):
         kamera.set(cv2.CAP_PROP_EXPOSURE, -4)
