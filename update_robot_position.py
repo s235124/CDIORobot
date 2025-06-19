@@ -19,15 +19,15 @@ def handle_command(cmd):
     if cmd == "forward":
         motor.on(30, 30)
     elif cmd == "reverse":
-        motor.on_for_seconds(-30, -30, seconds=1)
+        motor.on_for_seconds(-25, -25, seconds=.5)
     elif cmd == "catchball":
         port.on_for_seconds(speed=10, seconds=1)
-        motor.on_for_seconds(left_speed=10, right_speed=10, seconds=2)
+        motor.on_for_seconds(left_speed=10, right_speed=10, seconds=3)
         port.on_for_seconds(speed=-10, seconds=1)
     elif cmd == "slowleft":
-        motor.on_for_seconds(-5, 5, seconds=.1)
+        motor.on_for_seconds(-10, 10, seconds=.1)
     elif cmd == "slowright":
-        motor.on_for_seconds(5, -5, seconds=.1)
+        motor.on_for_seconds(10, -10, seconds=.1)
     elif cmd == "slowreverse":
         motor.on(-10, -10)
     elif cmd == "slowforward":

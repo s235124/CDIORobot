@@ -5,26 +5,13 @@ import paramiko
 import socket
 import time
 
-IPADDRESS = '169.254.142.235' # REMEMBER TO UPDATE THIS
+IPADDRESS = '169.254.99.240' # REMEMBER TO UPDATE THIS
 PORT = 9999
 
 sock = None
 
-def open_SSH_connection():
-    # Connect to the EV3 via SSH
-    # print("Connecting to EV3 at", IPADDRESS)
-    # global ssh_client
-    # ssh_client = paramiko.SSHClient()
-    # ssh_client.load_system_host_keys()
-    # ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-    # ssh_client.connect(IPADDRESS, username='robot', password='maker')
-
-    # command = f'python3 /home/robot/Gruppe3CDIOPython/first.py'
-    # stdin, stdout, stderr = ssh_client.exec_command(command)
-    
-    # Print output or errors (for debugging)
-    # print("STDOUT:", stdout.read().decode())
-    # print("STDERR:", stderr.read().decode())
+def open_ev3_connection():
+    # Connect to the EV3
     global sock
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.connect((IPADDRESS, PORT))
@@ -33,30 +20,20 @@ def open_SSH_connection():
 def send_command(cmd):
     print(f"Sending: {cmd}")
     sock.sendall(cmd.encode())
-    
-# def send_coordinates_to_ev3(angle, seconds):
-#     # Command to update robot's movement based on the target coordinates
-#     command = f'python3 /home/robot/Gruppe3CDIOPython/update_robot_position.py {angle} {seconds}'
-#     stdin, stdout, stderr = ssh_client.exec_command(command)
-    
-#     # Print output or errors (for debugging)
-#     print("Sending angle and seconds:", angle, seconds)
-#     print("STDOUT:", stdout.read().decode())
-#     print("STDERR:", stderr.read().decode())
 
-# def reverse_ev3():
-#     # Command to update robot's movement based on the target coordinates
-#     command = f'python3 /home/robot/Gruppe3CDIOPython/reverse.py'
-#     stdin, stdout, stderr = ssh_client.exec_command(command)
-    
-#     # Print output or errors (for debugging)
-#     print("STDOUT:", stdout.read().decode())
-#     print("STDERR:", stderr.read().decode())
-
-# def close_SSH_connection():
-#     # Close the SSH connection
-#     print("Closing SSH connection")
-#     ssh_client.close()
+def process_angle(angle):
+    if angle_of_robot > 45:
+        send_command('right')
+        time.sleep(0.7)
+    elif angle_of_robot < -45:
+        send_command('left')
+        time.sleep(0.7)
+    elif angle_of_robot > 2:
+        send_command('slowright')
+        time.sleep(0.2)
+    elif angle_of_robot < -2:
+        send_command('slowleft')
+        time.sleep(0.2)
 
 def calculate_rotation_angle(front, back, ball, return_degrees=True):
     # Calculate vectors
@@ -74,7 +51,7 @@ def calculate_rotation_angle(front, back, ball, return_degrees=True):
     
     # Convert to degrees if requested
     retval = math.degrees(angle_rad) if return_degrees else angle_rad
-    print(f"retval: {retval}")
+    # print(f"retval: {retval}")
     return retval
 
 # Example usage with your coordinates
@@ -150,7 +127,18 @@ def is_in_robot(green_contours, pink_contours, circlex, circley, boundary_box):
     # print("Circle is NOT in the robot area")
     return False
 
-def check_if_hit_obstacle(bottom, ball):
+def check_if_hit_obstacle(bottom, ball, boundary_box):
+    # return False
+    if boundary_box is None:
+        return False
+    
+    bx, by, bw, bh = boundary_box
+    mid_x = bx + bw / 2
+    mid_y = by + bh / 2
+
+    square_side = 150  # You can adjust this
+    half_side = square_side / 2
+
     rise = ball[1] - bottom[1]
     run = ball[0] - bottom[0]
 
@@ -160,8 +148,26 @@ def check_if_hit_obstacle(bottom, ball):
     
     slope = rise / run
 
+    low = 0
+    high = 0
 
-    pass
+    # Determine the range of x values to check
+    if (bottom[0] < ball[0]):
+        low = bottom[0]
+        high = ball[0]
+    else:
+        low = ball[0]
+        high = bottom[0]
+
+    # Check points along the line from bottom to ball
+    for i in range(int(low), int(high)):
+        cx = i
+        cy = int(bottom[1] + slope * (i - bottom[0]))
+        if (mid_x - half_side <= cx <= mid_x + half_side and
+            mid_y - half_side <= cy <= mid_y + half_side):
+            return True
+    
+    return False
 
 # Camera setup
 kamera = cv2.VideoCapture(0)
@@ -179,9 +185,11 @@ cm_per_pixel = 0
 ball_radius_px = 0 # Optimal ball radius is 16.3 px
 robot_speed = 22
 
+hitting_obstacle = False
 auto = True
 
-open_SSH_connection()
+if auto:
+    open_ev3_connection()
 
 def calibrate_measurement(event, x, y, flags, param):
     global px_measurements, calibration_done, cm_per_pixel, ball_radius_px
@@ -218,8 +226,8 @@ while not calibration_done:
 cv2.destroyAllWindows()
 print(f"Calibration complete - Expected ball radius: {ball_radius_px:.1f} pixels")
 
-min_radius = int(ball_radius_px * 0.7)
-max_radius = int(ball_radius_px * 3.5)
+min_radius = int(ball_radius_px -4)
+max_radius = int(ball_radius_px +4)
 print(f"Detection parameters - Radius range: {min_radius}-{max_radius} pixels")
 print(f"cm_per_pixel: {cm_per_pixel:.4f}")
 
@@ -227,33 +235,42 @@ print(f"cm_per_pixel: {cm_per_pixel:.4f}")
 # Wider Orange (for light + dark shades)
 lower_orange = np.array([1, 60, 60])
 upper_orange = np.array([30, 255, 255])
-
-# White (unchanged, works well for white ball)
 lower_white = np.array([0, 0, 180])
 upper_white = np.array([180, 80, 255])
-
+lower_blue = np.array([90, 120, 220])
+upper_blue = np.array([110, 255, 255])
 lower_red1 = np.array([0, 100, 100])
 upper_red1 = np.array([10, 255, 255])
 lower_red2 = np.array([160, 100, 100])
 upper_red2 = np.array([179, 255, 255])
 lower_green = np.array([40, 40, 40])        # Expanded range
 upper_green = np.array([90, 255, 255])
-lower_purple = np.array([130, 40, 40])      # Expanded range
-upper_purple = np.array([160, 255, 255])
-lower_pink = np.array([150, 100, 100])
-upper_pink = np.array([170, 255, 255])
+lower_purple = np.array([135, 100, 150])    # Expanded range
+upper_purple = np.array([155, 255, 255])
+lower_pink = np.array([150, 100, 90])
+upper_pink = np.array([175, 255, 255])
 lower_yellow = np.array([25, 100, 100])
 upper_yellow = np.array([35, 255, 255])
 
-e = True
-send_command('kick')
-time.sleep(0.5)
+if auto:
+    send_command('kick')
+    time.sleep(0.5)
 
 ball_counter = 0
 droppingBallsOff = False
 
+previous_circles = None
+reset_counter = 0
+
+cross_coords = None
+
 # Main processing loop
 while True:
+    if(reset_counter > 60):
+        print("Resetting circles")
+        previous_circles = None
+        reset_counter = 0
+
     ret, frame = kamera.read()
     if not ret:
         continue
@@ -290,67 +307,96 @@ while True:
         shrink_factor = 0.9
         inward_box = (box_points - center) * shrink_factor + center
         inward_box = np.int32(inward_box)
-        # inward_box[0][1] -= 20
-        # inward_box[3][1] -= 20
-        # inward_box[1][1] += 20
-        # inward_box[2][1] += 20
+
+        # Sort points by x (to get left/right)
+        sorted_by_x = sorted(inward_box, key=lambda p: p[0])
+        left_points = sorted_by_x[:2]   # Two with smallest x
+        right_points = sorted_by_x[2:]  # Two with largest x
+
+        # Sort each pair by y to get top/bottom
+        left_top, left_bottom = sorted(left_points, key=lambda p: p[1])
+        right_top, right_bottom = sorted(right_points, key=lambda p: p[1])
+
+        # Modify y-values
+        left_top[1] += 50
+        left_bottom[1] -= 50
+        right_top[1] += 50
+        right_bottom[1] -= 50
+
+        # Reconstruct inward_box in original order if needed
+        inward_box = np.array([left_top, right_top, right_bottom, left_bottom], dtype=np.int32)
         boundary_box = cv2.boundingRect(inward_box)
         cv2.drawContours(frame, [inward_box], 0, (0, 255, 255), 2)
         x, y, w, h = boundary_box
         cv2.putText(frame, "Wall Boundary", (x, y - 10),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
 
-    # mask_inside_wall = np.zeros_like(red_mask)
-    # cv2.fillPoly(mask_inside_wall, [inward_box], 255)
-    # red_mask_inside = cv2.bitwise_and(red_mask, mask_inside_wall)
+    mask_inside_wall = np.zeros_like(red_mask)
+    cv2.fillPoly(mask_inside_wall, [inward_box], 255)
+    red_mask_inside = cv2.bitwise_and(red_mask, mask_inside_wall)
 
-    # # Now use the inner mask to find potential cross contours
-    # red_contours, _ = cv2.findContours(red_mask_inside, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    # Now use the inner mask to find potential cross contours
+    red_contours, _ = cv2.findContours(red_mask_inside, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
-    # frame_h, frame_w = frame.shape[:2]
-    # frame_center = (frame_w // 2, frame_h // 2)
+    frame_h, frame_w = frame.shape[:2]
+    frame_center = (frame_w // 2, frame_h // 2)
 
-    # closest_cross = None
-    # closest_distance = float('inf')
-    # cross_center = (0, 0)
+    closest_cross = None
+    closest_distance = float('inf')
+    cross_center = (0, 0)
 
-    # for cnt in red_contours:
-    #     if cnt is None or cnt.size == 0 or cnt.shape[0] < 3:
-    #         continue
+    for cnt in red_contours:
+        if cnt is None or cnt.size == 0 or cnt.shape[0] < 3:
+            continue
 
-    #     if cv2.contourArea(cnt) < 100:
-    #         continue
+        if cv2.contourArea(cnt) < 100:
+            continue
 
-    #     approx = cv2.approxPolyDP(cnt, 0.02 * cv2.arcLength(cnt, True), True)
+        approx = cv2.approxPolyDP(cnt, 0.02 * cv2.arcLength(cnt, True), True)
 
-    #     # You can modify this condition depending on your shape
-    #     if 10 <= len(approx) <= 14:
-    #         M = cv2.moments(cnt)
-    #         if M["m00"] == 0:
-    #             continue
-    #         cx = int(M["m10"] / M["m00"])
-    #         cy = int(M["m01"] / M["m00"])
+        # You can modify this condition depending on your shape
+        if 10 <= len(approx) <= 14:
+            M = cv2.moments(cnt)
+            if M["m00"] == 0:
+                continue
+            cx = int(M["m10"] / M["m00"])
+            cy = int(M["m01"] / M["m00"])
 
-    #         # Compute distance to frame center
-    #         dist_to_center = np.sqrt((cx - frame_center[0])**2 + (cy - frame_center[1])**2)
+            # Compute distance to frame center
+            dist_to_center = np.sqrt((cx - frame_center[0])**2 + (cy - frame_center[1])**2)
 
-    #         if dist_to_center < closest_distance:
-    #             closest_distance = dist_to_center
-    #             closest_cross = cnt
-    #             cross_center = (cx, cy)
+            if dist_to_center < closest_distance:
+                closest_distance = dist_to_center
+                closest_cross = cnt
+                cross_center = (cx, cy)
 
-    # # Draw only the most centered valid cross
-    # if closest_cross is not None:
-    #     cv2.drawContours(frame, [closest_cross], -1, (0, 255, 0), 3)
-    #     cv2.putText(frame, "CROSS", (cross_center[0] - 40, cross_center[1] - 20),
-    #                 cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
-    #     if e:
-    #         print(f"KRYDS GENKENDT i midten: {closest_cross}")
-    #     e = False
+    # Draw only the most centered valid cross
+    if closest_cross is not None:
+        closest_cross = np.int32(closest_cross)
+        pts = closest_cross.reshape(-1, 2)                # shape (N, 2)
+
+        # 2.  Get an (x, y, w, h) bounding box
+        x, y, w, h = cv2.boundingRect(pts)             # axis‑aligned box
+
+        # 3.  Expand the box by a fixed margin (pixels) or by percentage
+        margin = 25
+        x_pad = max(0, x - margin)
+        y_pad = max(0, y - margin)
+        w_pad = min(frame_w - x_pad, w + 2*margin)
+        h_pad = min(frame_h - y_pad, h + 2*margin)
+
+        # 4.  Use / draw it
+        padded_box = (x_pad, y_pad, w_pad, h_pad)
+        cross_coords = padded_box
+        cv2.rectangle(frame,
+                    (x_pad, y_pad),
+                    (x_pad + w_pad, y_pad + h_pad),
+                    (0, 255, 0), 2)
 
     # Robot detection using HSV
     mask_green = cv2.inRange(hsv, lower_green, upper_green)
     mask_purple = cv2.inRange(hsv, lower_purple, upper_purple)
+    mask_blue = cv2.inRange(hsv, lower_blue, upper_blue)
     mask_pink = cv2.inRange(hsv, lower_pink, upper_pink)
     # mask_yellow = cv2.inRange(hsv, lower_yellow, upper_yellow)
     
@@ -358,17 +404,21 @@ while True:
     kernel_robot = np.ones((3, 3), np.uint8)
     mask_green = cv2.morphologyEx(mask_green, cv2.MORPH_OPEN, kernel_robot)
     mask_purple = cv2.morphologyEx(mask_purple, cv2.MORPH_OPEN, kernel_robot)
+    mask_blue = cv2.morphologyEx(mask_blue, cv2.MORPH_OPEN, kernel_robot)
     mask_pink = cv2.morphologyEx(mask_pink, cv2.MORPH_OPEN, kernel_robot)
     # mask_yellow = cv2.morphologyEx(mask_yellow, cv2.MORPH_OPEN, kernel_robot)
 
     # Find contours for both robot parts
     green_contours, _ = cv2.findContours(mask_green, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     purple_contours, _ = cv2.findContours(mask_purple, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    blue_contours, _ = cv2.findContours(mask_blue, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     pink_contours, _ = cv2.findContours(mask_pink, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     # yellow_contours, _ = cv2.findContours(mask_yellow, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+    robot_front_contours = blue_contours + pink_contours + purple_contours
     
     # Combine robot contours for exclusion zone
-    robot_contours = green_contours + pink_contours
+    robot_contours = green_contours + blue_contours
 
     robot_front = []
     robot_back = []
@@ -388,17 +438,10 @@ while True:
             cv2.putText(frame, f"Back ({x+w/2},{y+h/2})", (x, y - 10),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
 
-    # reverse_sent = False
-    # if len(pink_contours) <= 0 and not reverse_sent:
-    #     send_command('reverse')
-    #     reverse_sent = True
-    # elif len(pink_contours) > 0:
-    #     reverse_sent = False
-
-    for contour in pink_contours:
+    for contour in robot_front_contours:
         area = cv2.contourArea(contour)
 
-        if area > 100:
+        if area > 200:
             x, y, w, h = cv2.boundingRect(contour)
 
             if boundary_box is not None:
@@ -432,8 +475,7 @@ while True:
             cx, cy, r = int(i[0]), int(i[1]), int(i[2])
 
             # Exclude circles in robot areas
-            
-            if is_in_robot(green_contours, pink_contours, cx, cy, boundary_box):
+            if is_in_robot(green_contours, robot_front_contours, cx, cy, boundary_box):
                 continue
 
             # Exclude circles outside boundary
@@ -442,14 +484,10 @@ while True:
                 if not (bx <= cx <= bx + bw and by <= cy <= by + bh):
                     continue
 
-                square_side = 100  # You can adjust this
-                mid_x = bx + bw / 2
-                mid_y = by + bh / 2
-                half_side = square_side / 2
-                if (mid_x - half_side <= cx <= mid_x + half_side and
-                    mid_y - half_side <= cy <= mid_y + half_side):
-                    continue  # Skip this circle
-                
+            if cross_coords is not None:
+                x, y, w, h = cross_coords
+                if (x <= cx <= x + w and y <= cy <= y + h):
+                    continue
 
             filtered_circles.append(i)
 
@@ -462,86 +500,99 @@ while True:
                 cv2.circle(frame, (cx, cy), r, (0, 255, 0), 2)
                 cv2.putText(frame, f"Ball ({cx}, {cy})", (cx - r, cy - r - 10),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
-            # else:
-            #     cv2.circle(frame, (cx, cy), r, (255, 0, 0), 2)
-            #     cv2.putText(frame, "Egg", (cx - r, cy - r - 10),
-            #                 cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 0), 2)
+                
+    if previous_circles is None or len(previous_circles) < len(filtered_circles):
+        previous_circles = filtered_circles
+
+    if (reset_counter < 60): 
+        print("Incrementing counter")
+        reset_counter += 1
+        continue
+    
+    reset_counter +=1
+    
 
     # Display results
     # cv2.imshow("Red Color Filter", red_mask)
     # cv2.imshow("Green Color Filter", mask_green)
-    cv2.imshow("Red inside Filter", v_channel)
+    front_masks = mask_purple + mask_blue + mask_pink
+    cv2.imshow("Red inside Filter", front_masks)
     cv2.imshow("Robot and Ball Detection", frame)
 
-    # if (droppingBallsOff):
-    #     try:
-    #         top, robot = find_robot(green_contours, pink_contours, boundary_box)
-    #     except Exception as e:
-    #         # print("Error finding robot:", e)
-    #         continue
+    # Exit on 'q'
+    if cv2.waitKey(1) & 0xFF == ord('q'):
+        break
 
-    #     print("Ball counter reached 3, going to goal for drop-off")
-    #     goal = None
-    #     leftx =  inward_box[0][0]
-    #     rightx = inward_box[1][0]
-    #     robotx = robot[0]
-    #     roboty = robot[1]
+    if cv2.waitKey(1) & 0xFF == ord('m'):
+        print(boundary_box)
+    
+    if (droppingBallsOff):
+        try:
+            top, robot = find_robot(green_contours, robot_front_contours, boundary_box)
+        except Exception as e:
+            # print("Error finding robot:", e)
+            continue
 
-    #     if (robotx - leftx) < (rightx - robotx):
-    #         goal = (leftx, inward_box[0][1] + inward_box[0][1] / 2)
-    #     elif (robotx - leftx) > (rightx - robotx):
-    #         goal = (rightx, inward_box[1][1] + inward_box[1][1] / 2)
+        print("Ball counter reached 4, going to goal for drop-off")
+        goal = None
+        leftx =  inward_box[0][0]
+        rightx = inward_box[1][0]
+        robotx = robot[0]
+        roboty = robot[1]
 
-    #     if goal is not None:
-    #         # print(f"Going to goal: {goal}")
-    #         angle = calculate_rotation_angle((top[0], top[1]), (robot[0], robot[1]), (robot[0], goal[1]))
-    #         dist_to_middle = calculate_distance((robot[0], robot[1]), (robot[0], goal[1]))
+        if (robotx - leftx) < (rightx - robotx):
+            goal = (leftx, inward_box[0][1] + inward_box[0][1] / 2)
+        elif (robotx - leftx) > (rightx - robotx):
+            goal = (rightx, inward_box[1][1] + inward_box[1][1] / 2)
 
-    #         if not (dist_to_middle - 20 < dist_to_middle < dist_to_middle + 20):
-    #             if -3 < angle < 3:
+        if goal is not None:
+            # print(f"Going to goal: {goal}")
+            angle = calculate_rotation_angle((top[0], top[1]), (robot[0], robot[1]), (robot[0], goal[1]))
+            dist_to_middle = calculate_distance((robot[0], robot[1]), (robot[0], goal[1]))
+
+            if not (dist_to_middle - 20 < dist_to_middle < dist_to_middle + 20):
+                if -2 < angle < 2:
+                    send_command('stop')
+                else:
+                    send_command('forward')
                     
-    #                 send_command('stop')
-    #             else:
-    #                 send_command('forward')
-                    
-            
-    #             if angle > 45:
-    #                 send_command('right')
-    #                 time.sleep(0.7)
-    #                 continue
-    #             elif angle < -45:
-    #                 send_command('left')
-    #                 time.sleep(0.7)
-    #                 continue
-    #             elif angle > 3:
-    #                 send_command('slowright')
-    #                 time.sleep(0.2)
-    #                 continue
-    #             elif angle < -3:
-    #                 send_command('slowleft')
-    #                 time.sleep(0.2)
-    #                 continue
-    #         else:
-    #             send_command('stop')
-    #             time.sleep(0.2)
+                if angle > 45:
+                    send_command('right')
+                    time.sleep(0.7)
+                    continue
+                elif angle < -45:
+                    send_command('left')
+                    time.sleep(0.7)
+                    continue
+                elif angle > 2:
+                    send_command('slowright')
+                    time.sleep(0.2)
+                    continue
+                elif angle < -2:
+                    send_command('slowleft')
+                    time.sleep(0.2)
+                    continue
+            else:
+                send_command('stop')
+                time.sleep(0.2)
 
-    #         angleToGoal = calculate_rotation_angle((top[0], top[1]), (robot[0], robot[1]), (goal[0], goal[1]))
-    #         dist_to_goal = calculate_distance((robot[0], robot[1]), (goal[0], goal[1]))
+            angleToGoal = calculate_rotation_angle((top[0], top[1]), (robot[0], robot[1]), (goal[0], goal[1]))
+            dist_to_goal = calculate_distance((robot[0], robot[1]), (goal[0], goal[1]))
 
-    #         if not (dist_to_goal - 20 < dist_to_goal < dist_to_goal + 20):
-    #             if -3 < angleToGoal < 3:
-    #                 send_command('stop')
-    #             else:
-    #                 send_command('forward')
-    #                 continue
-
-    #         droppingBallsOff = False
-    #         ball_counter = 0
-    #     continue
+            if not (dist_to_goal - 20 < dist_to_goal < dist_to_goal + 20):
+                if -2 < angleToGoal < 2:
+                    send_command('stop')
+                else:
+                    send_command('forward')
+                    continue
+        print("Dropping balls off at goal")
+        droppingBallsOff = False
+        ball_counter = 0
+        continue
 
     if auto and green_contours:
 
-        if not filtered_circles:
+        if not previous_circles:
             # print("No circles detected")
             continue
 
@@ -550,23 +601,76 @@ while True:
         shortest_distance = 0
         
         try:
-            top, bottom = find_robot(green_contours, pink_contours, boundary_box)
+            top, bottom = find_robot(green_contours, robot_front_contours, boundary_box)
         except Exception as e:
             # print("Error finding robot:", e)
             send_command('reverse')
-            time.sleep(0.2)
+            time.sleep(0.5)
             continue
 
-        for circle in filtered_circles:
-            if circle[2] < (ball_radius_px * 1.2):
+        for circle in previous_circles:
+            if circle[2] < (ball_radius_px * 1.1):
                 x, y, r = circle[0], circle[1], circle[2]
 
                 dist = calculate_distance(bottom, (x, y))
-                if shortest_distance == 0 or dist < shortest_distance:
+                if (shortest_distance == 0 or dist < shortest_distance) and (dist > ball_radius_px * 4):
                     shortest_distance = dist
                     x1, y1 = x, y
                     # print(f"Circle found at ({x1}, {y1}) with distance {dist}")
                     
+        if hitting_obstacle:
+            # print("Obstacle detected, going around")
+            bx, by, bw, bh = boundary_box
+            if bottom[0] < x1:
+                if calculate_distance((top[0], top[1]), (top[0], by) < (ball_radius_px * 4)): # The robot is near the wall
+                    angle_of_robot = calculate_rotation_angle((top[0], top[1]), (bottom[0], bottom[1]), (bx + bw, bottom[1]))
+                    if -10 < angle_of_robot < 10: # The robot is facing the right direction
+                        if calculate_distance((top[0], top[1]), (bx+bw, top[1]) < (ball_radius_px * 4)): # The robot is at the right place
+                            send_command('stop')
+                            time.sleep(0.2)
+                            hitting_obstacle = False
+                            continue
+
+                        send_command('forward')
+                        continue
+                    else:
+                        process_angle(angle_of_robot)
+                        continue
+                else:
+                    angle_of_robot = calculate_rotation_angle((top[0], top[1]), (bottom[0], bottom[1]), (bottom[0], by))
+                    if -10 < angle_of_robot < 10:
+                        process_angle(angle_of_robot)
+                        continue
+
+                send_command('forward')
+                continue
+            elif bottom[0] > x1:
+                if calculate_distance((top[0], top[1]), (top[0], by + bh) < (ball_radius_px * 4)): # The robot is near the wall
+                    angle_of_robot = calculate_rotation_angle((top[0], top[1]), (bottom[0], bottom[1]), (bx, bottom[1]))
+                    if -10 < angle_of_robot < 10: # The robot is facing the right direction
+                        if calculate_distance((top[0], top[1]), (bx, top[1]) < (ball_radius_px * 4)): # The robot is at the right place
+                            send_command('stop')
+                            time.sleep(0.2)
+                            hitting_obstacle = False
+                            continue
+
+                        send_command('forward')
+                        continue
+                    else:
+                        process_angle(angle_of_robot)
+                        continue
+                else:
+                    angle_of_robot = calculate_rotation_angle((top[0], top[1]), (bottom[0], bottom[1]), (bottom[0], by + bh))
+                    if -10 < angle_of_robot < 10:
+                        process_angle(angle_of_robot)
+                        continue
+
+                send_command('forward')
+                continue
+            continue
+        else:
+            hitting_obstacle = check_if_hit_obstacle(bottom, (x1, y1), boundary_box)
+
         x1, y1 = float(x1), float(y1)
         x2, y2 = float(bottom[0]), float(bottom[1])
 
@@ -580,26 +684,28 @@ while True:
             send_command('stop')
             time.sleep(0.2)
         
-            if -3 < angleToMove < 3:
+            if -2 < angleToMove < 2:
                 # print("Robot is close enough to the ball, catching it")
                 send_command('catchball')
                 time.sleep(4)
-                # ball_counter += 1
-                # if ball_counter >= 3:
-                #     droppingBallsOff = True
+                ball_counter += 1
+                print("caught ball")
+                if ball_counter >= 4:
+                    print("dropping off balls")
+                    droppingBallsOff = True
                 continue 
 
             print(f"inside loop")
-            if angleToMove > 3:
+            if angleToMove > 2:
                 send_command('slowright')
                 time.sleep(0.2)
                 continue
-            elif angleToMove < -3:
+            elif angleToMove < -2:
                 send_command('slowleft')
                 time.sleep(0.2)
                 continue
 
-        print(f"out of loop")
+        # print(f"out of loop")
         if angleToMove > 45:
             send_command('right')
             time.sleep(0.7)
@@ -608,21 +714,15 @@ while True:
             send_command('left')
             time.sleep(0.7)
             continue
-        elif angleToMove > 3:
+        elif angleToMove > 2:
             send_command('slowright')
             time.sleep(0.2)
             continue
-        elif angleToMove < -3:
+        elif angleToMove < -2:
             send_command('slowleft')
             time.sleep(0.2)
             continue
         
-        # time.sleep(0.5)
-
-
-        # if calculate_distance((top[0], top[1]), (x1, y1)) < (ball_radius_px * 4):
-        #     send_command('stop')
-        #     time.sleep(0.2)
         if calculate_distance((top[0], top[1]), (x1, y1)) < (ball_radius_px * 6):
             send_command('slowforward')
             time.sleep(0.2)
@@ -630,22 +730,24 @@ while True:
             send_command('forward')
             # time.sleep(0.2)
 
+        previous_circles = None
+        
+        
+
     if cv2.waitKey(1) & 0xFF == ord('j'):
         kamera.set(cv2.CAP_PROP_EXPOSURE, -4)
     if cv2.waitKey(1) & 0xFF == ord('k'):
         kamera.set(cv2.CAP_PROP_EXPOSURE, -8)
     if cv2.waitKey(1) & 0xFF == ord('l'):
         kamera.set(cv2.CAP_PROP_EXPOSURE, -12)
-
-    # Exit on 'q'
-    if cv2.waitKey(1) & 0xFF == ord('q'):
-        break
         
 # if ssh_client is not None:
 #     close_SSH_connection()
 
-send_command('stop')
-sock.close()
+if auto:
+    print("Closing connection")
+    send_command('stop')
+    sock.close()
 
 kamera.release()
 cv2.destroyAllWindows()
