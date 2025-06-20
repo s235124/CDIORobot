@@ -40,12 +40,6 @@ def handle_command(cmd):
         motor.off()
         port.off()
         shooter.off()
-    # elif cmd == "portopen":
-    #     port.on_for_seconds(speed=10, seconds=1)
-    # elif cmd == "portclose":
-    #     port.on_for_seconds(speed=-10, seconds=1)
-    # elif cmd == "onemeter":
-    #     motor.on_for_seconds(left_speed=80, right_speed=80, seconds=4)
     elif cmd == "dropoff":
         port.on_for_seconds(speed=10, seconds=1)
         shooter.on_for_seconds(speed=-30, seconds=0.5)
