@@ -5,7 +5,7 @@ import paramiko
 import socket
 import time
 
-IPADDRESS = '169.254.23.0' # REMEMBER TO UPDATE THIS
+IPADDRESS = '169.254.94.219' # REMEMBER TO UPDATE THIS
 PORT = 9999
 
 CIRCLES = 'circles'
@@ -29,17 +29,18 @@ def send_command(cmd):
     sock.sendall(cmd.encode())
 
 def process_angle(angle):
-    if angle > 45:
-        send_command('right')
+    if abs(angle) > 45:
+        if angle > 0:
+            send_command('right')
+        else:
+            send_command('left')
         time.sleep(0.7)
-    elif angle < -45:
-        send_command('left')
-        time.sleep(0.7)
-    elif angle > 2:
-        send_command('slowright')
-        time.sleep(0.2)
-    elif angle < -2:
-        send_command('slowleft')
+    elif abs(angle) > 1:
+        if angle > 0:
+            send_command('slowright')
+        # time.sleep(0.2)
+        else:
+            send_command('slowleft')
         time.sleep(0.2)
 
 def calculate_rotation_angle(front, back, ball, return_degrees=True):
@@ -58,7 +59,7 @@ def calculate_rotation_angle(front, back, ball, return_degrees=True):
     
     # Convert to degrees if requested
     retval = math.degrees(angle_rad) if return_degrees else angle_rad
-    # print(f"retval: {retval}")
+    print(f"retval: {retval}")
     return retval
 
 # Example usage with your coordinates
@@ -74,39 +75,35 @@ def calculate_distance(p1, p2):
     dy = float(p2[1]) - float(p1[1])
     return np.sqrt((dx)**2 + (dy)**2)
 
-def find_robot(green_contours, pink_contours, boundary_box):
-    if not green_contours or not pink_contours:
-        # print("No robot parts detected")
+def get_largest_contour_center(mask):
+    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    if not contours:
+        return None
+    largest = max(contours, key=cv2.contourArea)
+    M = cv2.moments(largest)
+    if M["m00"] == 0:
+        return None
+    cx = int(M["m10"] / M["m00"])
+    cy = int(M["m01"] / M["m00"])
+    return (cx, cy)
+
+
+def find_robot():
+    ret, frame = kamera.read()
+    if not ret:
         return False
     
-    topx, topy, topw, toph = cv2.boundingRect(pink_contours[0])
+    hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+    
+    # Front = pink
+    pink_mask = cv2.inRange(hsv, lower_pink, upper_pink)
+    front = get_largest_contour_center(pink_mask)
 
-    top = (topx + (topw / 2), topy + (toph / 2))
+    # Body = grøn
+    green_mask = cv2.inRange(hsv, lower_green, upper_green)
+    back = get_largest_contour_center(green_mask)
 
-    shortest_distance = 0
-    longest_distance = 0
-    bottomx = 0
-    bottomy = 0
-
-
-    for green_cont in green_contours:
-        x, y, w, h = cv2.boundingRect(green_cont)
-
-        if boundary_box is not None:
-                bx, by, bw, bh = boundary_box
-                if not (bx <= x <= bx + bw and by <= y <= by + bh):
-                    continue
-
-        dist = calculate_distance(top, (x + w / 2, y + h / 2))
-        if longest_distance == 0 or dist > longest_distance:
-            longest_distance = dist
-            bottomx = x + w / 2
-            bottomy = y + h / 2
-        
-    bottom = (bottomx, bottomy)
-
-    return top, bottom
-
+    return front, back
 
 
 def check_if_hit_obstacle(bottom, ball, boundary_box):
@@ -282,10 +279,10 @@ def get_frame():
         right_top, right_bottom = sorted(right_points, key=lambda p: p[1])
 
         # Modify y-values
-        left_top[1] += 50
-        left_bottom[1] -= 50
-        right_top[1] += 50
-        right_bottom[1] -= 50
+        left_top[1] += 60
+        left_bottom[1] -= 60
+        right_top[1] += 60
+        right_bottom[1] -= 60
 
         # Reconstruct inward_box in original order if needed
         inward_box = np.array([left_top, right_top, right_bottom, left_bottom], dtype=np.int32)
@@ -307,7 +304,7 @@ def get_frame():
 
     closest_cross = None
     closest_distance = float('inf')
-    cross_center = (0, 0)
+    cross_coords = None
 
     for cnt in red_contours:
         if cnt is None or cnt.size == 0 or cnt.shape[0] < 3:
@@ -469,6 +466,8 @@ going_towards_ball = False
 current_ball_counter = 0
 droppingBallsOff = False
 
+stop_program = False
+
 previous_circles = None
 
 cross_coords = None
@@ -476,12 +475,19 @@ cross_coords = None
 # Main processing loop
 while True:
 
-    boundary_box, green_contours, robot_front_contours, filtered_circles = get_frame()
+    print("Big iteration")
 
-    for i in range(5):
-        if previous_circles is None or len(previous_circles) < len(filtered_circles):
-            previous_circles = filtered_circles
-            print("Found more circles")
+    if droppingBallsOff == False:
+        for i in range(5):
+            boundary_box, green_contours, robot_front_contours, filtered_circles = get_frame()
+
+            if previous_circles is None or len(previous_circles) < len(filtered_circles):
+                previous_circles = filtered_circles
+                print("Found more circles")
+
+        if len(previous_circles) == 0:
+            droppingBallsOff = True
+            stop_program = True
 
     # Exit on 'q'
     if cv2.waitKey(1) & 0xFF == ord('q'):
@@ -491,7 +497,7 @@ while True:
         print(boundary_box)
 
     try:
-        top, bottom = find_robot(green_contours, robot_front_contours, boundary_box)
+        top, bottom = find_robot()
     except Exception as e:
         # print("Error finding robot:", e)
         continue
@@ -514,100 +520,81 @@ while True:
 
         going_towards_ball = True
 
-    print("before going towards ball")
+    # print("before going towards ball")
 
-    while going_towards_ball == True:
-
+    if (droppingBallsOff):
+        print("dropping Balls Off")
         boundary_box, green_contours, robot_front_contours, filtered_circles = get_frame()
-        
-        if (droppingBallsOff):
-            try:
-                top, bottom = find_robot(green_contours, robot_front_contours, boundary_box)
-            except Exception as e:
-                # print("Error finding robot:", e)
-                continue
 
-            print("Ball counter reached 4, going to goal for drop-off")
-            goal = None
-            bx, by, bw, bh = boundary_box
+        try:
+            top, bottom = find_robot()
+        except Exception as e:
+            print("Error finding robot:", e)
+            send_command('reverse')
+            time.sleep(0.5)
+            continue
 
-            leftx = bx
-            rightx = bx + bw
-            b_boxy = by + bh / 2
+        print("Ball counter reached 4, going to goal for drop-off")
+        goal = None
+        bx, by, bw, bh = boundary_box
 
-            robotx = bottom[0]
-            roboty = bottom[1]
+        leftx = bx
+        rightx = bx + bw
+        b_boxy = by + bh / 2
 
-            if (robotx - leftx) < (rightx - robotx):
-                goal = (leftx, b_boxy)
-            elif (robotx - leftx) > (rightx - robotx):
-                goal = (rightx, b_boxy)
+        robotx = bottom[0]
+        roboty = bottom[1]
 
-            if goal is not None:
-                # print(f"Going to goal: {goal}")
+        if (robotx - leftx) < (rightx - robotx):
+            goal = (leftx, b_boxy)
+        elif (robotx - leftx) > (rightx - robotx):
+            goal = (rightx, b_boxy)
+
+        if goal is not None:
+            print("goal is existant")
+
+            dist_to_middle = calculate_distance((robotx, roboty), (robotx, goal[1]))
+
+            if -17 < dist_to_middle < 17:
                 angle_from_middle_to_goal = calculate_rotation_angle((top[0], top[1]), (robotx, roboty), (goal[0], goal[1]))
-
-                if -5 < angle_from_middle_to_goal < 5:
-                    if -20 < calculate_distance((robotx, roboty), goal) < 20:
+                if -2 < angle_from_middle_to_goal < 2:
+                    dist_to_goal = calculate_distance(top, goal)
+                    if -17 < dist_to_goal < 17:
+                        send_command('stop')
+                        time.sleep(0.2)
                         send_command('dropoff')
                         print("kicking balls out")
+                        time.sleep(3)
+                        droppingBallsOff = False
+                        current_ball_counter = 0
+                        if stop_program:
+                            break
                         continue
-                    process_angle(angle_from_middle_to_goal)
+                    
+                    send_command('forward')
                     continue
-                
-                dist_to_middle = calculate_distance((robotx, roboty), (robotx, goal[1]))
 
-                angle_from_robot_to_middle = calculate_rotation_angle((top[0], top[1]), (robotx, roboty), (robotx, goal[1]))
-                if -5 < angle_from_robot_to_middle < 5:
-                    if -20 < dist_to_middle < 20:
-                        send_command('stop')
-                        continue
-                    else: 
-                        send_command('forward')
-                process_angle(angle_from_robot_to_middle)
+                process_angle(angle_from_middle_to_goal)
+                continue
+            
+            angle_from_robot_to_middle = calculate_rotation_angle((top[0], top[1]), (robotx, roboty), (robotx, goal[1]))
 
+            if -2 < angle_from_robot_to_middle < 2:
+                if -10 < dist_to_middle < 10:
+                    send_command('stop')
+                    time.sleep(0.2)
+                    continue
+                send_command('forward')
+                continue
 
-
-                # if not (dist_to_middle - 20 < dist_to_middle < dist_to_middle + 20):
-                #     if -2 < angle < 2:
-                #         send_command('forward')
-                #         continue
-                #     else:
-                #         send_command('stop')
-                        
-                #     if angle > 45:
-                #         send_command('right')
-                #         time.sleep(0.7)
-                #         continue
-                #     elif angle < -45:
-                #         send_command('left')
-                #         time.sleep(0.7)
-                #         continue
-                #     elif angle > 2:
-                #         send_command('slowright')
-                #         time.sleep(0.2)
-                #         continue
-                #     elif angle < -2:
-                #         send_command('slowleft')
-                #         time.sleep(0.2)
-                #         continue
-                # else:
-                #     send_command('stop')
-                #     time.sleep(0.2)
-
-                angleToGoal = calculate_rotation_angle((top[0], top[1]), (bottom[0], bottom[1]), (goal[0], goal[1]))
-                dist_to_goal = calculate_distance((bottom[0], bottom[1]), (goal[0], goal[1]))
-
-                if not (dist_to_goal - 20 < dist_to_goal < dist_to_goal + 20):
-                    if -2 < angleToGoal < 2:
-                        send_command('stop')
-                    else:
-                        send_command('forward')
-                        continue
-            print("Dropping balls off at goal")
-            droppingBallsOff = False
-            current_ball_counter = 0
+            process_angle(angle_from_robot_to_middle)
             continue
+        continue
+
+    while going_towards_ball == True:
+        print("small iteration")
+        boundary_box, green_contours, robot_front_contours, filtered_circles = get_frame()
+        
 
         if auto and green_contours:
 
@@ -620,75 +607,86 @@ while True:
             # shortest_distance = 0
             
             try:
-                top, bottom = find_robot(green_contours, robot_front_contours, boundary_box)
+                top, bottom = find_robot()
             except Exception as e:
                 # print("Error finding robot:", e)
                 send_command('reverse')
                 time.sleep(0.5)
                 continue
 
-            # for circle in previous_circles:
-            #     if circle[2] < (ball_radius_px * 1.1):
-            #         x, y, r = circle[0], circle[1], circle[2]
+            # if hitting_obstacle:
+            #     print("Obstacle detected, going around")
+            #     bx, by, bw, bh = boundary_box
+            #     if bottom[0] < x1:
+            #         print("Robot is on left side of destination")
+            #         if calculate_distance((top[0], top[1]), (top[0], by)) < (ball_radius_px * 4): # The robot is near the wall
+            #             print("Robot is near top of wall")
+            #             angle_of_robot = calculate_rotation_angle((top[0], top[1]), (bottom[0], bottom[1]), (bx + bw, bottom[1]))
+            #             if -5 < angle_of_robot < 5: # The robot is facing the right direction
+            #                 print("Robot is facing destination in the interval of -5 to 5 deg")
+            #                 if calculate_distance((top[0], top[1]), (bx+bw, top[1])) < (ball_radius_px * 4): # The robot is at the right place
+            #                     print("Robot has arrived on the correct side")
+            #                     send_command('stop')
+            #                     time.sleep(0.2)
+            #                     hitting_obstacle = False
+            #                     continue
 
-            #         dist = calculate_distance(bottom, (x, y))
-            #         if (shortest_distance == 0 or dist < shortest_distance) and (dist > ball_radius_px * 4):
-            #             shortest_distance = dist
-            #             x1, y1 = x, y
-            #             # print(f"Circle found at ({x1}, {y1}) with distance {dist}")
-                        
-            if hitting_obstacle:
-                # print("Obstacle detected, going around")
-                bx, by, bw, bh = boundary_box
-                if bottom[0] < x1:
-                    if calculate_distance((top[0], top[1]), (top[0], by) < (ball_radius_px * 4)): # The robot is near the wall
-                        angle_of_robot = calculate_rotation_angle((top[0], top[1]), (bottom[0], bottom[1]), (bx + bw, bottom[1]))
-                        if -10 < angle_of_robot < 10: # The robot is facing the right direction
-                            if calculate_distance((top[0], top[1]), (bx+bw, top[1]) < (ball_radius_px * 4)): # The robot is at the right place
-                                send_command('stop')
-                                time.sleep(0.2)
-                                hitting_obstacle = False
-                                continue
+            #                 print("Robot is NOT near right wall")
+            #                 send_command('forward')
+            #                 continue
+            #             else:
+            #                 print("L Robot is NOT facing destination in the interval of -5 to 5 deg")
+            #                 process_angle(angle_of_robot)
+            #                 time.sleep(0.2)
+            #                 continue
+            #         else:
+            #             angle_of_robot = calculate_rotation_angle((top[0], top[1]), (bottom[0], bottom[1]), (bottom[0], by))
+            #             if -5 < angle_of_robot < 5:
+            #                 print("L Robot is NOT near bottom wall")
+            #                 send_command('forward')
+            #                 time.sleep(0.2)
+            #                 continue
 
-                            send_command('forward')
-                            continue
-                        else:
-                            process_angle(angle_of_robot)
-                            continue
-                    else:
-                        angle_of_robot = calculate_rotation_angle((top[0], top[1]), (bottom[0], bottom[1]), (bottom[0], by))
-                        if -10 < angle_of_robot < 10:
-                            process_angle(angle_of_robot)
-                            continue
+            #             print("L Robot is NOT facing destination in the interval of -5 to 5 deg")
+            #             process_angle(angle_of_robot)
+            #             continue
+            #     elif bottom[0] > x1:
+            #         print("Robot is on right side of destination")
+            #         if calculate_distance((top[0], top[1]), (top[0], by + bh)) < (ball_radius_px * 4): # The robot is near the wall
+            #             print("Robot is near bottom of wall")
+            #             angle_of_robot = calculate_rotation_angle((top[0], top[1]), (bottom[0], bottom[1]), (bx, bottom[1]))
+            #             if -5 < angle_of_robot < 5: # The robot is facing the right direction
+            #                 print("Robot is facing destination in the interval of -5 to 5 deg")
+            #                 if calculate_distance((top[0], top[1]), (bx, top[1])) < (ball_radius_px * 4): # The robot is at the right place
+            #                     print("Robot has arrived on the correct side")
+            #                     send_command('stop')
+            #                     time.sleep(0.2)
+            #                     hitting_obstacle = False
+            #                     continue
 
-                    send_command('forward')
-                    continue
-                elif bottom[0] > x1:
-                    if calculate_distance((top[0], top[1]), (top[0], by + bh) < (ball_radius_px * 4)): # The robot is near the wall
-                        angle_of_robot = calculate_rotation_angle((top[0], top[1]), (bottom[0], bottom[1]), (bx, bottom[1]))
-                        if -10 < angle_of_robot < 10: # The robot is facing the right direction
-                            if calculate_distance((top[0], top[1]), (bx, top[1]) < (ball_radius_px * 4)): # The robot is at the right place
-                                send_command('stop')
-                                time.sleep(0.2)
-                                hitting_obstacle = False
-                                continue
+            #                 print("Robot is NOT near left wall")
+            #                 send_command('forward')
+            #                 continue
+            #             else:
+            #                 print("R Robot is NOT facing destination in the interval of -5 to 5 deg")
+            #                 process_angle(angle_of_robot)
+            #                 time.sleep(0.2)
+            #                 continue
+            #         else:
+            #             angle_of_robot = calculate_rotation_angle((top[0], top[1]), (bottom[0], bottom[1]), (bottom[0], by + bh))
+            #             if -5 < angle_of_robot < 5:
+            #                 print("R Robot is NOT near bottom wall")
+            #                 send_command('forward')
+            #                 time.sleep(0.2)
+            #                 continue
 
-                            send_command('forward')
-                            continue
-                        else:
-                            process_angle(angle_of_robot)
-                            continue
-                    else:
-                        angle_of_robot = calculate_rotation_angle((top[0], top[1]), (bottom[0], bottom[1]), (bottom[0], by + bh))
-                        if -10 < angle_of_robot < 10:
-                            process_angle(angle_of_robot)
-                            continue
-
-                    send_command('forward')
-                    continue
-                continue
-            else:
-                hitting_obstacle = check_if_hit_obstacle(bottom, (x1, y1), boundary_box)
+            #             print("R Robot is NOT facing destination in the interval of -5 to 5 deg")
+            #             process_angle(angle_of_robot)
+            #             continue
+            #     continue
+            # else:
+            #     print("Not hitting any obstacles")
+            #     hitting_obstacle = check_if_hit_obstacle(bottom, (x1, y1), boundary_box)
 
             x1, y1 = float(x1), float(y1)
 
@@ -698,7 +696,7 @@ while True:
 
             # print(f"Distances: {distanceBtwCircleAndRobot}, {ball_radius_px * 4}")
             if calculate_distance((top[0], top[1]), (x1, y1)) < (ball_radius_px * 2):
-
+                print("Robot is close")
                 send_command('stop')
                 time.sleep(0.2)
             
@@ -710,8 +708,8 @@ while True:
                     going_towards_ball = False
                     print("caught ball")
                     if current_ball_counter >= 4:
-                        print("dropping off balls")
                         droppingBallsOff = True
+                        print("dropping off balls")
                     continue 
 
                 print(f"inside loop")
@@ -724,37 +722,36 @@ while True:
                     time.sleep(0.2)
                     continue
 
-            print(f"out of loop")
-            if angleToMove > 45:
-                send_command('right')
+            if abs(angleToMove) > 45:
+                if angleToMove > 0:
+                    send_command('right')
+                else:
+                    send_command('left')
                 time.sleep(0.7)
                 continue
-            elif angleToMove < -45:
-                send_command('left')
-                time.sleep(0.7)
-                continue
-            elif angleToMove > 2:
-                send_command('slowright')
-                time.sleep(0.2)
-                continue
-            elif angleToMove < -2:
-                send_command('slowleft')
+            elif abs(angleToMove) > 2:
+                if angleToMove > 0:
+                    send_command('slowright')
+                # time.sleep(0.2)
+                else:
+                    send_command('slowleft')
                 time.sleep(0.2)
                 continue
             
             if calculate_distance((top[0], top[1]), (x1, y1)) < (ball_radius_px * 6):
                 send_command('slowforward')
                 time.sleep(0.2)
-            elif calculate_distance((top[0], top[1]), (x1, y1)) > (ball_radius_px * 8):
+            else:
                 send_command('forward')
-                # time.sleep(0.2)
 
     previous_circles = None
+    # print("End of iteration")
         
         
 if auto:
     print("Closing connection")
     send_command('stop')
+    time.sleep(0.2)
     sock.close()
 
 kamera.release()
