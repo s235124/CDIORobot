@@ -5,7 +5,7 @@ import paramiko
 import socket
 import time
 
-IPADDRESS = '169.254.94.219' # REMEMBER TO UPDATE THIS
+IPADDRESS = '169.254.243.129' # REMEMBER TO UPDATE THIS
 PORT = 9999
 
 CIRCLES = 'circles'
@@ -29,16 +29,21 @@ def send_command(cmd):
     sock.sendall(cmd.encode())
 
 def process_angle(angle):
-    if abs(angle) > 45:
+    if abs(angle) > 80:
+        if angle > 0:
+            send_command('fastright')
+        else:
+            send_command('fastleft')
+        time.sleep(0.7)
+    elif abs(angle) > 45:
         if angle > 0:
             send_command('right')
         else:
             send_command('left')
-        time.sleep(0.7)
-    elif abs(angle) > 1:
+        time.sleep(0.2)
+    elif abs(angle) > 2:
         if angle > 0:
             send_command('slowright')
-        # time.sleep(0.2)
         else:
             send_command('slowleft')
         time.sleep(0.2)
@@ -59,7 +64,7 @@ def calculate_rotation_angle(front, back, ball, return_degrees=True):
     
     # Convert to degrees if requested
     retval = math.degrees(angle_rad) if return_degrees else angle_rad
-    print(f"retval: {retval}")
+    # print(f"retval: {retval}")
     return retval
 
 # Example usage with your coordinates
@@ -106,47 +111,68 @@ def find_robot():
     return front, back
 
 
-def check_if_hit_obstacle(bottom, ball, boundary_box):
+def check_if_hit_obstacle(bottom, top, ball, boundary_box, cross_coords):
     # return False
-    if boundary_box is None:
-        return False
+    if cross_coords is None or boundary_box is None:
+        return
     
-    bx, by, bw, bh = boundary_box
-    mid_x = bx + bw / 2
-    mid_y = by + bh / 2
+    crossx, crossy, crossw, crossh = cross_coords
 
-    square_side = 150  # You can adjust this
-    half_side = square_side / 2
+    mid_x = crossx + crossw / 2
+    mid_y = crossy + crossh / 2
 
-    rise = ball[1] - bottom[1]
-    run = ball[0] - bottom[0]
+    distance_to_cross = calculate_distance(top, (mid_x, mid_y))
+    longest_allowed_distance_from_cross = np.sqrt((crossw / 2)**2 + (crossh / 2)**2) * 1.1
 
-    if run == 0:
-        # Avoid division by zero
-        return False
+    if distance_to_cross < longest_allowed_distance_from_cross:
+        send_command('stop')
+        time.sleep(0.2)
+
+        send_command('fastright')
+        time.sleep(0.2)
+
+        send_command('forward')
+        time.sleep(3)
+
+        send_command('stop')
     
-    slope = rise / run
 
-    low = 0
-    high = 0
+    # # square_side_x = crossw  # You can adjust this
+    # half_side = crossw / 2
 
-    # Determine the range of x values to check
-    if (bottom[0] < ball[0]):
-        low = bottom[0]
-        high = ball[0]
-    else:
-        low = ball[0]
-        high = bottom[0]
+    # half_side_y = crossh / 2
 
-    # Check points along the line from bottom to ball
-    for i in range(int(low), int(high)):
-        cx = i
-        cy = int(bottom[1] + slope * (i - bottom[0]))
-        if (mid_x - half_side <= cx <= mid_x + half_side and
-            mid_y - half_side <= cy <= mid_y + half_side):
-            return True
+    # print(half_side, half_side_y)
+
+    # rise = ball[1] - bottom[1]
+    # run = ball[0] - bottom[0]
+
+    # if run == 0:
+    #     # Avoid division by zero
+    #     return False
     
-    return False
+    # slope = rise / run
+
+    # low = 0
+    # high = 0
+
+    # # Determine the range of x values to check
+    # if (bottom[0] < ball[0]):
+    #     low = bottom[0]
+    #     high = ball[0]
+    # else:
+    #     low = ball[0]
+    #     high = bottom[0]
+
+    # # Check points along the line from bottom to ball
+    # for i in range(int(low), int(high)):
+    #     cx = i
+    #     cy = int(bottom[1] + slope * (i - bottom[0]))
+    #     if (mid_x - half_side <= cx <= mid_x + half_side and
+    #         mid_y - half_side_y <= cy <= mid_y + half_side_y):
+    #         return True
+    
+    # return False
 
 # Camera setup
 kamera = cv2.VideoCapture(0)
@@ -454,7 +480,7 @@ def get_frame():
     cv2.imshow("Red inside Filter", front_masks)
     cv2.imshow("Robot and Ball Detection", frame)
 
-    return boundary_box, green_contours, robot_front_contours, filtered_circles
+    return cross_coords, boundary_box, green_contours, robot_front_contours, filtered_circles
 
 if auto:
     send_command('kick')
@@ -479,7 +505,7 @@ while True:
 
     if droppingBallsOff == False:
         for i in range(5):
-            boundary_box, green_contours, robot_front_contours, filtered_circles = get_frame()
+            cross_coords, boundary_box, green_contours, robot_front_contours, filtered_circles = get_frame()
 
             if previous_circles is None or len(previous_circles) < len(filtered_circles):
                 previous_circles = filtered_circles
@@ -524,7 +550,7 @@ while True:
 
     if (droppingBallsOff):
         print("dropping Balls Off")
-        boundary_box, green_contours, robot_front_contours, filtered_circles = get_frame()
+        cross_coords, boundary_box, green_contours, robot_front_contours, filtered_circles = get_frame()
 
         try:
             top, bottom = find_robot()
@@ -534,32 +560,35 @@ while True:
             time.sleep(0.5)
             continue
 
-        print("Ball counter reached 4, going to goal for drop-off")
+        # print("Ball counter reached 4, going to goal for drop-off")
         goal = None
         bx, by, bw, bh = boundary_box
 
         leftx = bx
         rightx = bx + bw
         b_boxy = by + bh / 2
+        x_coord_of_middle = 0
 
         robotx = bottom[0]
         roboty = bottom[1]
 
         if (robotx - leftx) < (rightx - robotx):
             goal = (leftx, b_boxy)
+            x_coord_of_middle = bx + bw / 4
         elif (robotx - leftx) > (rightx - robotx):
             goal = (rightx, b_boxy)
+            x_coord_of_middle = bx + bw * 0.8
 
         if goal is not None:
-            print("goal is existant")
+            # print("goal is existant")
 
             dist_to_middle = calculate_distance((robotx, roboty), (robotx, goal[1]))
 
-            if -17 < dist_to_middle < 17:
+            if -20 < dist_to_middle < 20:
                 angle_from_middle_to_goal = calculate_rotation_angle((top[0], top[1]), (robotx, roboty), (goal[0], goal[1]))
                 if -2 < angle_from_middle_to_goal < 2:
                     dist_to_goal = calculate_distance(top, goal)
-                    if -17 < dist_to_goal < 17:
+                    if -20 < dist_to_goal < 20:
                         send_command('stop')
                         time.sleep(0.2)
                         send_command('dropoff')
@@ -571,13 +600,14 @@ while True:
                             break
                         continue
                     
-                    send_command('forward')
+                    # check_if_hit_obstacle(bottom, top, (x1,y1), boundary_box, cross_coords)
+                    send_command('slowforward')
                     continue
 
                 process_angle(angle_from_middle_to_goal)
                 continue
             
-            angle_from_robot_to_middle = calculate_rotation_angle((top[0], top[1]), (robotx, roboty), (robotx, goal[1]))
+            angle_from_robot_to_middle = calculate_rotation_angle((top[0], top[1]), (robotx, roboty), (x_coord_of_middle, goal[1]))
 
             if -2 < angle_from_robot_to_middle < 2:
                 if -10 < dist_to_middle < 10:
@@ -593,7 +623,7 @@ while True:
 
     while going_towards_ball == True:
         print("small iteration")
-        boundary_box, green_contours, robot_front_contours, filtered_circles = get_frame()
+        cross_coords, boundary_box, green_contours, robot_front_contours, filtered_circles = get_frame()
         
 
         if auto and green_contours:
@@ -622,7 +652,7 @@ while True:
             #         if calculate_distance((top[0], top[1]), (top[0], by)) < (ball_radius_px * 4): # The robot is near the wall
             #             print("Robot is near top of wall")
             #             angle_of_robot = calculate_rotation_angle((top[0], top[1]), (bottom[0], bottom[1]), (bx + bw, bottom[1]))
-            #             if -5 < angle_of_robot < 5: # The robot is facing the right direction
+            #             if -10 < angle_of_robot < 10: # The robot is facing the right direction
             #                 print("Robot is facing destination in the interval of -5 to 5 deg")
             #                 if calculate_distance((top[0], top[1]), (bx+bw, top[1])) < (ball_radius_px * 4): # The robot is at the right place
             #                     print("Robot has arrived on the correct side")
@@ -641,7 +671,7 @@ while True:
             #                 continue
             #         else:
             #             angle_of_robot = calculate_rotation_angle((top[0], top[1]), (bottom[0], bottom[1]), (bottom[0], by))
-            #             if -5 < angle_of_robot < 5:
+            #             if -10 < angle_of_robot < 10:
             #                 print("L Robot is NOT near bottom wall")
             #                 send_command('forward')
             #                 time.sleep(0.2)
@@ -655,7 +685,7 @@ while True:
             #         if calculate_distance((top[0], top[1]), (top[0], by + bh)) < (ball_radius_px * 4): # The robot is near the wall
             #             print("Robot is near bottom of wall")
             #             angle_of_robot = calculate_rotation_angle((top[0], top[1]), (bottom[0], bottom[1]), (bx, bottom[1]))
-            #             if -5 < angle_of_robot < 5: # The robot is facing the right direction
+            #             if -10 < angle_of_robot < 10: # The robot is facing the right direction
             #                 print("Robot is facing destination in the interval of -5 to 5 deg")
             #                 if calculate_distance((top[0], top[1]), (bx, top[1])) < (ball_radius_px * 4): # The robot is at the right place
             #                     print("Robot has arrived on the correct side")
@@ -674,19 +704,19 @@ while True:
             #                 continue
             #         else:
             #             angle_of_robot = calculate_rotation_angle((top[0], top[1]), (bottom[0], bottom[1]), (bottom[0], by + bh))
-            #             if -5 < angle_of_robot < 5:
+            #             if -10 < angle_of_robot < 10:
             #                 print("R Robot is NOT near bottom wall")
             #                 send_command('forward')
             #                 time.sleep(0.2)
             #                 continue
 
-            #             print("R Robot is NOT facing destination in the interval of -5 to 5 deg")
+            #             print("R Robot is NOT facing bottom wall in the interval of -5 to 5 deg")
             #             process_angle(angle_of_robot)
             #             continue
             #     continue
             # else:
-            #     print("Not hitting any obstacles")
-            #     hitting_obstacle = check_if_hit_obstacle(bottom, (x1, y1), boundary_box)
+            #     hitting_obstacle = check_if_hit_obstacle(bottom, (x1, y1), cross_coords)
+            #     print(hitting_obstacle, x1, y1)
 
             x1, y1 = float(x1), float(y1)
 
@@ -694,55 +724,74 @@ while True:
 
             angleToMove = calculate_rotation_angle((top[0],top[1]), (bottom[0],bottom[1]), (x1, y1))
 
-            # print(f"Distances: {distanceBtwCircleAndRobot}, {ball_radius_px * 4}")
-            if calculate_distance((top[0], top[1]), (x1, y1)) < (ball_radius_px * 2):
-                print("Robot is close")
-                send_command('stop')
-                time.sleep(0.2)
-            
-                if -2 < angleToMove < 2:
-                    print("Robot is close enough to the ball, catching it")
+            if -2 < angleToMove < 2:
+                distance_to_ball = calculate_distance(top, (x1,y1))
+                if distance_to_ball < (ball_radius_px * 3):
+                    send_command('stop')
+                    time.sleep(0.2)
+
                     send_command('catchball')
                     time.sleep(4)
                     current_ball_counter += 1
                     going_towards_ball = False
-                    print("caught ball")
+
                     if current_ball_counter >= 4:
                         droppingBallsOff = True
-                        print("dropping off balls")
-                    continue 
-
-                print(f"inside loop")
-                if angleToMove > 2:
-                    send_command('slowright')
-                    time.sleep(0.2)
-                    continue
-                elif angleToMove < -2:
-                    send_command('slowleft')
-                    time.sleep(0.2)
                     continue
 
-            if abs(angleToMove) > 45:
-                if angleToMove > 0:
-                    send_command('right')
+                if distance_to_ball < (ball_radius_px * 6):
+                    check_if_hit_obstacle(bottom, top, (x1,y1), boundary_box, cross_coords)
+                    send_command('slowforward')
+                    time.sleep(0.2)
                 else:
-                    send_command('left')
-                time.sleep(0.7)
+                    check_if_hit_obstacle(bottom, top, (x1,y1), boundary_box, cross_coords)
+                    send_command('forward')
                 continue
-            elif abs(angleToMove) > 2:
-                if angleToMove > 0:
-                    send_command('slowright')
-                # time.sleep(0.2)
-                else:
-                    send_command('slowleft')
-                time.sleep(0.2)
-                continue
+
+            process_angle(angleToMove)
+
+            # # print(f"Distances: {distanceBtwCircleAndRobot}, {ball_radius_px * 4}")
+            # if calculate_distance((top[0], top[1]), (x1, y1)) < (ball_radius_px * 2):
+            #     print("Robot is close")
+            #     send_command('stop')
+            #     time.sleep(0.2)
             
-            if calculate_distance((top[0], top[1]), (x1, y1)) < (ball_radius_px * 6):
-                send_command('slowforward')
-                time.sleep(0.2)
-            else:
-                send_command('forward')
+            #     if -2 < angleToMove < 2:
+            #         print("Robot is close enough to the ball, catching it")
+            #         send_command('catchball')
+            #         time.sleep(4)
+            #         current_ball_counter += 1
+            #         going_towards_ball = False
+            #         print("caught ball")
+            #         if current_ball_counter >= 4:
+            #             droppingBallsOff = True
+            #             print("dropping off balls")
+            #         continue 
+
+            #     process_angle(angleToMove)
+            #     continue
+
+            # if abs(angleToMove) > 45:
+            #     if angleToMove > 0:
+            #         send_command('right')
+            #     else:
+            #         send_command('left')
+            #     time.sleep(0.7)
+            #     continue
+            # elif abs(angleToMove) > 2:
+            #     if angleToMove > 0:
+            #         send_command('slowright')
+            #     # time.sleep(0.2)
+            #     else:
+            #         send_command('slowleft')
+            #     time.sleep(0.2)
+            #     continue
+            
+            # if calculate_distance((top[0], top[1]), (x1, y1)) < (ball_radius_px * 6):
+            #     send_command('slowforward')
+            #     time.sleep(0.2)
+            # else:
+            #     send_command('forward')
 
     previous_circles = None
     # print("End of iteration")

@@ -28,13 +28,17 @@ def handle_command(cmd):
         motor.on_for_seconds(-10, 10, seconds=.1)
     elif cmd == "slowright":
         motor.on_for_seconds(10, -10, seconds=.1)
+    elif cmd == "left":
+        motor.on_for_seconds(-15, 15, seconds=.2)
+    elif cmd == "right":
+        motor.on_for_seconds(15, -15, seconds=.2)
     elif cmd == "slowreverse":
         motor.on(-10, -10)
     elif cmd == "slowforward":
         motor.on(10, 10)
-    elif cmd == "left":
+    elif cmd == "fastleft":
         motor.on_for_seconds(-20, 20, seconds=0.5)
-    elif cmd == "right":
+    elif cmd == "fastright":
         motor.on_for_seconds(20, -20, seconds=0.5)
     elif cmd == "stop":
         motor.off()
@@ -55,6 +59,7 @@ def handle_command(cmd):
         shooter.on_for_seconds(speed=30, seconds=0.5)
         sleep(0.5)
         port.on_for_seconds(speed=-10, seconds=1)
+        motor.on_for_seconds(-25, -25, seconds=.2)
     elif cmd == "kick":
         shooter.on_for_seconds(speed=-30, seconds=0.5)
         sleep(0.5)
