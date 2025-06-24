@@ -11,8 +11,8 @@ PORT = 9999
 motor = MoveTank(OUTPUT_A, OUTPUT_C)
 port = MediumMotor(OUTPUT_D)
 shooter = MediumMotor(OUTPUT_B)
-# motor.gyro = GyroSensor()
-# motor.gyro.calibrate()
+
+KICKSECS = 0.23
 
 def handle_command(cmd):
     print("Received command: {}".format(cmd))
@@ -21,7 +21,7 @@ def handle_command(cmd):
     elif cmd == "reverse":
         motor.on_for_seconds(-25, -25, seconds=.5)
     elif cmd == "catchball":
-        port.on_for_seconds(speed=10, seconds=1)
+        port.on_for_seconds(speed=15, seconds=1)
         motor.on_for_seconds(left_speed=10, right_speed=10, seconds=2)
         port.on_for_seconds(speed=-10, seconds=1)
     elif cmd == "slowleft":
@@ -46,18 +46,22 @@ def handle_command(cmd):
         shooter.off()
     elif cmd == "dropoff":
         port.on_for_seconds(speed=10, seconds=1)
-        shooter.on_for_seconds(speed=-30, seconds=0.5)
-        sleep(0.5)
-        shooter.on_for_seconds(speed=30, seconds=0.5)
-        sleep(0.5)
-        shooter.on_for_seconds(speed=-30, seconds=0.5)
-        sleep(0.5)
-        shooter.on_for_seconds(speed=30, seconds=0.5)
-        sleep(0.5)
-        shooter.on_for_seconds(speed=-30, seconds=0.5)
-        sleep(0.5)
-        shooter.on_for_seconds(speed=30, seconds=0.5)
-        sleep(0.5)
+        shooter.on_for_seconds(speed=-30, seconds=0.23)
+        # sleep(0.2)
+        shooter.on_for_seconds(speed=30, seconds=0.3)
+        # sleep(0.2)
+        shooter.on_for_seconds(speed=-30, seconds=0.23)
+        # sleep(0.5)
+        shooter.on_for_seconds(speed=30, seconds=0.3)
+        # sleep(0.5)
+        shooter.on_for_seconds(speed=-30, seconds=0.23)
+        # sleep(0.5)
+        shooter.on_for_seconds(speed=30, seconds=0.3)
+        # sleep(0.5)
+        shooter.on_for_seconds(speed=-30, seconds=0.23)
+        # sleep(0.5)
+        shooter.on_for_seconds(speed=30, seconds=0.3)
+        # sleep(0.5)
         port.on_for_seconds(speed=-10, seconds=1)
         motor.on_for_seconds(-25, -25, seconds=.2)
     elif cmd == "kick":
