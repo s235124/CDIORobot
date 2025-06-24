@@ -22,7 +22,7 @@ def handle_command(cmd):
         motor.on_for_seconds(-25, -25, seconds=.5)
     elif cmd == "catchball":
         port.on_for_seconds(speed=10, seconds=1)
-        motor.on_for_seconds(left_speed=10, right_speed=10, seconds=3)
+        motor.on_for_seconds(left_speed=10, right_speed=10, seconds=2)
         port.on_for_seconds(speed=-10, seconds=1)
     elif cmd == "slowleft":
         motor.on_for_seconds(-10, 10, seconds=.1)
