@@ -4,7 +4,7 @@ import math
 import socket
 import time
 
-IPADDRESS = '169.254.243.28' # REMEMBER TO UPDATE THIS
+IPADDRESS = '169.254.224.90' # REMEMBER TO UPDATE THIS
 PORT = 9999
 
 CIRCLES = 'circles'
@@ -40,7 +40,7 @@ def process_angle(angle):
         else:
             send_command('left')
         time.sleep(0.2)
-    elif abs(angle) > 2:
+    elif abs(angle) > 1:
         if angle > 0:
             send_command('slowright')
         else:
@@ -114,7 +114,7 @@ def check_if_hit_obstacle(bottom, top, boundary_box, cross_coords):
     mid_y = crossy + crossh / 2
 
     distance_to_cross = calculate_distance(top, (mid_x, mid_y))
-    longest_allowed_distance_from_cross = np.sqrt((crossw / 2)**2 + (crossh / 2)**2) * 1.2
+    longest_allowed_distance_from_cross = np.sqrt((crossw / 2)**2 + (crossh / 2)**2) * 1.4
 
     if distance_to_cross > longest_allowed_distance_from_cross:
         return False
@@ -556,9 +556,9 @@ while True:
 
             if -30 < dist_to_middle < 30:
                 angle_from_middle_to_goal = calculate_rotation_angle((top[0], top[1]), (robotx, roboty), (goal[0], goal[1]))
-                if -1 < angle_from_middle_to_goal < 1:
+                if -2 < angle_from_middle_to_goal < 2:
                     dist_to_goal = calculate_distance(top, goal)
-                    if -10 < dist_to_goal < 10:
+                    if -15 < dist_to_goal < 15:
                         send_command('stop')
                         time.sleep(0.2)
                         send_command('dropoff')
@@ -580,7 +580,7 @@ while True:
             
             angle_from_robot_to_middle = calculate_rotation_angle((top[0], top[1]), (robotx, roboty), (x_coord_of_middle, goal[1]))
 
-            if -1 < angle_from_robot_to_middle < 1:
+            if -2 < angle_from_robot_to_middle < 2:
                 if -5 < dist_to_middle < 5:
                     send_command('stop')
                     time.sleep(0.2)
@@ -622,7 +622,7 @@ while True:
 
             angleToMove = calculate_rotation_angle((top[0],top[1]), (bottom[0],bottom[1]), (x1, y1))
 
-            if -1 < angleToMove < 1:
+            if -2 < angleToMove < 2:
                 distance_to_ball = calculate_distance(top, (x1,y1))
                 if distance_to_ball < (ball_radius_px * 4):
                     send_command('stop')
