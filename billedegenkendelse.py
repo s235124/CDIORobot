@@ -4,20 +4,12 @@ import math
 import socket
 import time
 
-IPADDRESS = '169.254.224.90' # REMEMBER TO UPDATE THIS
+IPADDRESS = '169.254.186.104' # REMEMBER TO UPDATE THIS
 PORT = 9999
-
-CIRCLES = 'circles'
-FRONT = 'front'
-BACK = 'back'
-ROBOT = 'robot'
-WALLS = 'walls'
-
 
 sock = None
 
 def open_ev3_connection():
-    # Connect to the EV3
     global sock
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.connect((IPADDRESS, PORT))
@@ -48,20 +40,16 @@ def process_angle(angle):
         time.sleep(0.2)
 
 def calculate_rotation_angle(front, back, ball, return_degrees=True):
-    # Calculate vectors
-    print(f"Front: {front}, Back: {back}, Ball: {ball}")
+    # print(f"Front: {front}, Back: {back}, Ball: {ball}")
 
     vec_orientation = (front[0] - back[0], front[1] - back[1])
     vec_to_ball = (ball[0] - back[0], ball[1] - back[1])
     
-    # Compute dot product and determinant
     dot = vec_orientation[0] * vec_to_ball[0] + vec_orientation[1] * vec_to_ball[1]
     det = vec_orientation[0] * vec_to_ball[1] - vec_orientation[1] * vec_to_ball[0]
     
-    # Calculate angle in radians
     angle_rad = math.atan2(det, dot)
     
-    # Convert to degrees if requested
     retval = math.degrees(angle_rad) if return_degrees else angle_rad
     # print(f"retval: {retval}")
     return retval
@@ -91,11 +79,9 @@ def find_robot():
     
     hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
     
-    # Front = pink
     pink_mask = cv2.inRange(hsv, lower_pink, upper_pink)
     front = get_largest_contour_center(pink_mask)
 
-    # Body = grøn
     green_mask = cv2.inRange(hsv, lower_green, upper_green)
     back = get_largest_contour_center(green_mask)
 
@@ -148,10 +134,8 @@ kamera.set(cv2.CAP_PROP_FRAME_WIDTH, 1920)
 kamera.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080)
 kamera.set(cv2.CAP_PROP_AUTO_EXPOSURE, 0.25)
 kamera.set(cv2.CAP_PROP_EXPOSURE, -6)
-# kamera.set(cv2.CAP_PROP_BRIGHTNESS, 0.7)      # Range: 0.0 - 1.0
-# kamera.set(cv2.CAP_PROP_WHITE_BALANCE_BLUE_U, 4000)  # Try adjusting WB if supported
 
-# Global variables for calibration
+# Global variables
 calibration_done = False
 px_measurements = []
 cm_per_pixel = 0
@@ -177,7 +161,7 @@ def calibrate_measurement(event, x, y, flags, param):
                 ball_radius_px = 2.5 / cm_per_pixel
                 calibration_done = True
 
-# Calibration window
+# Show Calibration window
 cv2.namedWindow("Calibration")
 cv2.setMouseCallback("Calibration", calibrate_measurement)
 
@@ -204,26 +188,25 @@ max_radius = int(ball_radius_px +4)
 print(f"Detection parameters - Radius range: {min_radius}-{max_radius} pixels")
 print(f"cm_per_pixel: {cm_per_pixel:.4f}")
 
-# Optimized HSV color ranges
-# Wider Orange (for light + dark shades)
-lower_orange = np.array([1, 60, 60])
-upper_orange = np.array([30, 255, 255])
-lower_white = np.array([0, 0, 180])
-upper_white = np.array([180, 80, 255])
-lower_blue = np.array([90, 120, 220])
-upper_blue = np.array([110, 255, 255])
+# HSV color ranges
+# lower_orange = np.array([1, 60, 60])
+# upper_orange = np.array([30, 255, 255])
+# lower_white = np.array([0, 0, 180])
+# upper_white = np.array([180, 80, 255])
+# lower_blue = np.array([90, 120, 220])
+# upper_blue = np.array([110, 255, 255])
 lower_red1 = np.array([0, 100, 100])
 upper_red1 = np.array([10, 255, 255])
 lower_red2 = np.array([160, 100, 100])
 upper_red2 = np.array([179, 255, 255])
-lower_green = np.array([40, 40, 40])        # Expanded range
+lower_green = np.array([40, 40, 40])
 upper_green = np.array([90, 255, 255])
-lower_purple = np.array([135, 100, 150])    # Expanded range
-upper_purple = np.array([155, 255, 255])
+# lower_purple = np.array([135, 100, 150])
+# upper_purple = np.array([155, 255, 255])
 lower_pink = np.array([150, 100, 90])
 upper_pink = np.array([175, 255, 255])
-lower_yellow = np.array([25, 100, 100])
-upper_yellow = np.array([35, 255, 255])
+# lower_yellow = np.array([25, 100, 100])
+# upper_yellow = np.array([35, 255, 255])
 
 def get_frame():
     ret, frame = kamera.read()
@@ -233,7 +216,7 @@ def get_frame():
     # Convert to HSV once and use for all operations
     hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
     
-    # Extract V channel for circle detection (from HSV)
+    # Extract V channel for circle detection
     v_channel = hsv[:, :, 2]
     v_channel = cv2.medianBlur(v_channel, 5)
 
@@ -263,22 +246,22 @@ def get_frame():
         inward_box = (box_points - center) * shrink_factor + center
         inward_box = np.int32(inward_box)
 
-        # Sort points by x (to get left/right)
+        # Sort points by x
         sorted_by_x = sorted(inward_box, key=lambda p: p[0])
-        left_points = sorted_by_x[:2]   # Two with smallest x
-        right_points = sorted_by_x[2:]  # Two with largest x
+        left_points = sorted_by_x[:2]
+        right_points = sorted_by_x[2:]
 
-        # Sort each pair by y to get top/bottom
+        # Sort each pair by y
         left_top, left_bottom = sorted(left_points, key=lambda p: p[1])
         right_top, right_bottom = sorted(right_points, key=lambda p: p[1])
 
-        # Modify y-values
+        # Modify y-values to make box smaller
         left_top[1] += 60
         left_bottom[1] -= 60
         right_top[1] += 60
         right_bottom[1] -= 60
 
-        # Reconstruct inward_box in original order if needed
+        # Reconstruct inward box in original order
         inward_box = np.array([left_top, right_top, right_bottom, left_bottom], dtype=np.int32)
         boundary_box = cv2.boundingRect(inward_box)
         cv2.drawContours(frame, [inward_box], 0, (0, 255, 255), 2)
@@ -290,7 +273,6 @@ def get_frame():
     cv2.fillPoly(mask_inside_wall, [inward_box], 255)
     red_mask_inside = cv2.bitwise_and(red_mask, mask_inside_wall)
 
-    # Now use the inner mask to find potential cross contours
     red_contours, _ = cv2.findContours(red_mask_inside, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
     frame_h, frame_w = frame.shape[:2]
@@ -300,6 +282,7 @@ def get_frame():
     closest_distance = float('inf')
     cross_coords = None
 
+    # Finding the cross
     for cnt in red_contours:
         if cnt is None or cnt.size == 0 or cnt.shape[0] < 3:
             continue
@@ -309,7 +292,6 @@ def get_frame():
 
         approx = cv2.approxPolyDP(cnt, 0.02 * cv2.arcLength(cnt, True), True)
 
-        # You can modify this condition depending on your shape
         if 10 <= len(approx) <= 14:
             M = cv2.moments(cnt)
             if M["m00"] == 0:
@@ -328,12 +310,11 @@ def get_frame():
     # Draw only the most centered valid cross
     if closest_cross is not None:
         closest_cross = np.int32(closest_cross)
-        pts = closest_cross.reshape(-1, 2)                # shape (N, 2)
+        pts = closest_cross.reshape(-1, 2)
 
-        # 2.  Get an (x, y, w, h) bounding box
-        x, y, w, h = cv2.boundingRect(pts)             # axis‑aligned box
+        x, y, w, h = cv2.boundingRect(pts)
 
-        # 3.  Expand the box by a fixed margin (pixels) or by percentage
+        # Expand the box by a fixed margin
         margin = 30
         x_pad = max(0, x - margin)
         y_pad = max(0, y - margin)
@@ -350,29 +331,28 @@ def get_frame():
 
     # Robot detection using HSV
     mask_green = cv2.inRange(hsv, lower_green, upper_green)
-    mask_purple = cv2.inRange(hsv, lower_purple, upper_purple)
-    mask_blue = cv2.inRange(hsv, lower_blue, upper_blue)
     mask_pink = cv2.inRange(hsv, lower_pink, upper_pink)
+    # mask_purple = cv2.inRange(hsv, lower_purple, upper_purple)
+    # mask_blue = cv2.inRange(hsv, lower_blue, upper_blue)
     # mask_yellow = cv2.inRange(hsv, lower_yellow, upper_yellow)
     
     # Apply morphology to robot masks
     kernel_robot = np.ones((3, 3), np.uint8)
     mask_green = cv2.morphologyEx(mask_green, cv2.MORPH_OPEN, kernel_robot)
-    mask_purple = cv2.morphologyEx(mask_purple, cv2.MORPH_OPEN, kernel_robot)
-    mask_blue = cv2.morphologyEx(mask_blue, cv2.MORPH_OPEN, kernel_robot)
     mask_pink = cv2.morphologyEx(mask_pink, cv2.MORPH_OPEN, kernel_robot)
+    # mask_purple = cv2.morphologyEx(mask_purple, cv2.MORPH_OPEN, kernel_robot)
+    # mask_blue = cv2.morphologyEx(mask_blue, cv2.MORPH_OPEN, kernel_robot)
     # mask_yellow = cv2.morphologyEx(mask_yellow, cv2.MORPH_OPEN, kernel_robot)
 
     # Find contours for both robot parts
     green_contours, _ = cv2.findContours(mask_green, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    purple_contours, _ = cv2.findContours(mask_purple, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    blue_contours, _ = cv2.findContours(mask_blue, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     pink_contours, _ = cv2.findContours(mask_pink, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    # purple_contours, _ = cv2.findContours(mask_purple, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    # blue_contours, _ = cv2.findContours(mask_blue, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     # yellow_contours, _ = cv2.findContours(mask_yellow, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
-    robot_front_contours = blue_contours + pink_contours + purple_contours
+    # robot_front_contours = blue_contours + pink_contours + purple_contours
 
-    # Process green robot part
     for contour in green_contours:
         area = cv2.contourArea(contour)
         if area > 100:
@@ -420,7 +400,7 @@ def get_frame():
         for i in circles[0, :]:
             cx, cy, r = int(i[0]), int(i[1]), int(i[2])
 
-            # Exclude circles outside boundary
+            # Exclude circles outside boundary box walls
             if boundary_box is not None:
                 bx, by, bw, bh = boundary_box
                 if not (bx <= cx <= bx + bw and by <= cy <= by + bh):
@@ -444,7 +424,7 @@ def get_frame():
                             cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
                 
     # Display results
-    front_masks = mask_purple + mask_blue + mask_pink
+    # front_masks = mask_purple + mask_blue + mask_pink
     # cv2.imshow("Red inside Filter", front_masks)
     cv2.imshow("Robot and Ball Detection", frame)
 
@@ -466,7 +446,7 @@ previous_circles = None
 
 cross_coords = None
 
-# Main processing loop
+# Main loop
 while True:
 
     print("Big iteration")
@@ -487,8 +467,8 @@ while True:
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
 
-    if cv2.waitKey(1) & 0xFF == ord('m'):
-        print(boundary_box)
+    # if cv2.waitKey(1) & 0xFF == ord('m'):
+    #     print(boundary_box)
 
     try:
         top, bottom = find_robot()
@@ -556,7 +536,7 @@ while True:
 
             if -30 < dist_to_middle < 30:
                 angle_from_middle_to_goal = calculate_rotation_angle((top[0], top[1]), (robotx, roboty), (goal[0], goal[1]))
-                if -2 < angle_from_middle_to_goal < 2:
+                if -1 < angle_from_middle_to_goal < 1:
                     dist_to_goal = calculate_distance(top, goal)
                     if -15 < dist_to_goal < 15:
                         send_command('stop')
@@ -622,7 +602,7 @@ while True:
 
             angleToMove = calculate_rotation_angle((top[0],top[1]), (bottom[0],bottom[1]), (x1, y1))
 
-            if -2 < angleToMove < 2:
+            if -1 < angleToMove < 1:
                 distance_to_ball = calculate_distance(top, (x1,y1))
                 if distance_to_ball < (ball_radius_px * 4):
                     send_command('stop')
